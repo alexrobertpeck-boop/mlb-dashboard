@@ -525,6 +525,29 @@
   .last10-w { color: #1a7a3a; font-weight: 700; }
   .last10-l { color: #b3261e; font-weight: 700; }
 
+  /* ─── Collapsible section (used by Injury Report) ─── */
+  .collapsible summary {
+    list-style: none; /* remove default disclosure triangle */
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+  }
+  .collapsible summary::-webkit-details-marker { display: none; }
+  .collapsible summary h2 { margin: 0; }
+  .collapsible summary::after {
+    content: '▾';
+    font-size: 1.3em;
+    color: var(--team-primary);
+    margin-right: 4px;
+    transition: transform 0.2s ease;
+    line-height: 1;
+  }
+  .collapsible[open] summary::after { transform: rotate(180deg); }
+  .collapsible[open] summary { margin-bottom: 16px; }
+  .collapsible summary:hover h2 { opacity: 0.85; }
+
   /* ─── Injury list ─── */
   .injury-list { display: flex; flex-direction: column; gap: 8px; }
   .injury-row {
@@ -1595,11 +1618,6 @@
   </section>
 
   <section>
-    <h2>Injury Report</h2>
-    <div id="injuries" class="loading">Loading…</div>
-  </section>
-
-  <section>
     <h2>Season Stats</h2>
     <div class="stat-pair">
       <div class="stat-box">
@@ -1630,6 +1648,15 @@
   <section>
     <h2>Latest News</h2>
     <div id="news" class="loading">Loading…</div>
+  </section>
+
+  <section id="injury-section">
+    <details class="collapsible">
+      <summary>
+        <h2 id="injury-heading">Injury Report</h2>
+      </summary>
+      <div id="injuries" class="loading">Loading…</div>
+    </details>
   </section>
 
   <section>
@@ -2030,6 +2057,10 @@ async function loadInjuries() {
 
   const el = document.getElementById('injuries');
   el.classList.remove('loading');
+
+  // Update the collapsible heading with the count
+  const heading = document.getElementById('injury-heading');
+  if (heading) heading.textContent = `Injury Report${injured.length ? ` (${injured.length})` : ''}`;
 
   if (injured.length === 0) {
     el.innerHTML = '<div class="empty-note">No players currently on the injured list.</div>';
