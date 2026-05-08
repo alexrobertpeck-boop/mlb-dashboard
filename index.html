@@ -799,6 +799,134 @@
     .teams-grid { grid-template-columns: 1fr; }
   }
 
+  /* ─── Landing page (multi-team overview) ─── */
+  .back-to-overview {
+    padding: 12px 24px;
+    font-size: 0.85em;
+    background: white;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .back-to-overview a {
+    color: var(--team-primary);
+    text-decoration: none;
+    font-weight: 700;
+  }
+  .back-to-overview a:hover { text-decoration: underline; }
+
+  .landing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+  }
+  .landing-card {
+    background: white;
+    border: 1px solid #ececec;
+    border-radius: 12px;
+    padding: 18px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+  .landing-card:hover {
+    border-color: var(--team-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.07);
+  }
+  .landing-card-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f0f0f0;
+    margin-bottom: 12px;
+  }
+  .landing-card-logo {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  .landing-card-team {
+    font-size: 1.05em;
+    font-weight: 800;
+    line-height: 1.15;
+    color: #222;
+  }
+  .landing-card-record {
+    font-size: 0.85em;
+    color: #666;
+    margin-top: 2px;
+  }
+  .landing-card-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 0.7em;
+    color: #555;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+  }
+  .landing-card-stats strong { font-weight: 800; color: #222; font-size: 1.1em; }
+  .landing-card-game {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 0.88em;
+    margin: 5px 0;
+    color: #444;
+  }
+  .landing-card-game-label {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 0.7em;
+    color: #888;
+    width: 32px;
+    flex-shrink: 0;
+  }
+  .landing-card-game-result.win { color: #1a7a3a; font-weight: 700; }
+  .landing-card-game-result.loss { color: #b3261e; font-weight: 700; }
+  .landing-card-cta {
+    margin-top: 14px;
+    text-align: right;
+    font-size: 0.82em;
+    color: var(--team-primary);
+    font-weight: 700;
+  }
+
+  .landing-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: #666;
+  }
+  .landing-empty p {
+    font-size: 1em;
+    margin: 0 0 16px;
+  }
+  .landing-empty button {
+    background: var(--team-primary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 12px 24px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.95em;
+  }
+
+  /* View-based show/hide */
+  main[data-view="landing"] #team-view { display: none; }
+  main[data-view="team"]    #landing-view { display: none; }
+  main[data-view="landing"] .header-logo { display: none; }
+  main[data-view="landing"] .header-record { display: none; }
+  main[data-view="landing"] .header-chevron { display: none; }
+  main[data-view="landing"] .header-brand { cursor: default; }
+  main[data-view="landing"] .header-brand:hover { background: transparent; }
+
   /* ─── Mobile tweaks ─── */
   @media (max-width: 600px) {
     body { padding: 12px; }
@@ -853,6 +981,23 @@
     </div>
   </header>
 
+  <div class="back-to-overview" id="back-to-overview" hidden>
+    <a href="/">← Your teams</a>
+  </div>
+
+  <div id="landing-view">
+    <section>
+      <h2>Your Teams</h2>
+      <div class="landing-grid" id="landing-grid"></div>
+      <div class="landing-empty" id="landing-empty" hidden>
+        <p>You haven't saved any teams yet.</p>
+        <button id="landing-add-teams-btn">Pick your teams</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="team-view">
+
   <section>
     <h2>Schedule</h2>
     <div class="calendar-wrap">
@@ -902,6 +1047,8 @@
     <h2>Playoff Outlook</h2>
     <div id="playoff-odds" class="loading">Loading…</div>
   </section>
+
+  </div><!-- /#team-view -->
 </main>
 
 <div class="auth-modal" id="auth-modal" hidden>
@@ -1569,6 +1716,145 @@ async function loadPlayoffOdds() {
   `;
 }
 
+/* ─── Landing view (multi-team overview) ─── */
+
+async function fetchLandingData(teamIds) {
+  const season = new Date().getFullYear();
+  const [standingsData, scheduleData] = await Promise.all([
+    fetchJSON(`${API_BASE}/standings?leagueId=103,104&season=${season}`),
+    fetchJSON(`${API_BASE}/schedule?sportId=1&teamId=${teamIds.join(',')}&startDate=${isoDate(-30)}&endDate=${isoDate(30)}`),
+  ]);
+
+  const byTeam = {};
+  for (const id of teamIds) byTeam[id] = { id };
+
+  for (const division of standingsData.records) {
+    for (const t of division.teamRecords) {
+      if (byTeam[t.team.id]) {
+        const lastTen = t.records?.splitRecords?.find(r => r.type === 'lastTen');
+        Object.assign(byTeam[t.team.id], {
+          wins: t.wins,
+          losses: t.losses,
+          pct: parseFloat(t.winningPercentage),
+          divisionId: division.division.id,
+          divisionRank: parseInt(t.divisionRank, 10),
+          lastTen: { wins: lastTen?.wins ?? 0, losses: lastTen?.losses ?? 0 },
+        });
+      }
+    }
+  }
+
+  const allGames = scheduleData.dates.flatMap(d => d.games);
+  for (const id of teamIds) {
+    const games = allGames.filter(g =>
+      g.teams.home.team.id === id || g.teams.away.team.id === id
+    );
+    const finals = games
+      .filter(g => g.status.detailedState === 'Final'
+        && g.teams.home.score !== undefined
+        && g.teams.away.score !== undefined)
+      .sort((a, b) => new Date(a.gameDate) - new Date(b.gameDate));
+    byTeam[id].lastGame = finals[finals.length - 1] ?? null;
+
+    const upcoming = games
+      .filter(g => g.status.abstractGameState === 'Preview')
+      .sort((a, b) => new Date(a.gameDate) - new Date(b.gameDate));
+    byTeam[id].nextGame = upcoming[0] ?? null;
+  }
+
+  return byTeam;
+}
+
+function describeLastGame(g, teamId) {
+  const isHome = g.teams.home.team.id === teamId;
+  const opp = isHome ? g.teams.away.team : g.teams.home.team;
+  const oppAbbr = TEAMS[opp.id]?.abbr || '???';
+  const myScore = isHome ? g.teams.home.score : g.teams.away.score;
+  const oppScore = isHome ? g.teams.away.score : g.teams.home.score;
+  const won = myScore > oppScore;
+  return {
+    text: `${isHome ? 'vs' : '@'} ${oppAbbr} ${myScore}–${oppScore}`,
+    resultClass: won ? 'win' : 'loss',
+    resultText: won ? 'W' : 'L',
+  };
+}
+
+function describeNextGame(g, teamId) {
+  const isHome = g.teams.home.team.id === teamId;
+  const opp = isHome ? g.teams.away.team : g.teams.home.team;
+  const oppAbbr = TEAMS[opp.id]?.abbr || '???';
+  const date = new Date(g.gameDate);
+  const today = new Date();
+  const diffDays = Math.round((date.setHours(0,0,0,0) - today.setHours(0,0,0,0)) / 86400000);
+  let dayLabel;
+  if (diffDays === 0) dayLabel = 'Today';
+  else if (diffDays === 1) dayLabel = 'Tomorrow';
+  else dayLabel = new Date(g.gameDate).toLocaleDateString(undefined, { weekday: 'short' });
+  const time = new Date(g.gameDate).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return `${dayLabel} ${isHome ? 'vs' : '@'} ${oppAbbr} ${time}`;
+}
+
+function renderLandingCard(team) {
+  const meta = TEAMS[team.id];
+  const logo = `https://www.mlbstatic.com/team-logos/${team.id}.svg`;
+  const divName = DIVISIONS[team.divisionId] || '';
+  const recordText = team.wins !== undefined ? `${team.wins}–${team.losses} · ${formatPct(team.pct)}` : '';
+
+  let lastGameHtml = `<div class="landing-card-game"><span class="landing-card-game-label">Last</span><span style="color:#aaa">No recent games</span></div>`;
+  if (team.lastGame) {
+    const d = describeLastGame(team.lastGame, team.id);
+    lastGameHtml = `<div class="landing-card-game">
+      <span class="landing-card-game-label">Last</span>
+      <span><span class="landing-card-game-result ${d.resultClass}">${d.resultText}</span> ${d.text}</span>
+    </div>`;
+  }
+
+  let nextGameHtml = `<div class="landing-card-game"><span class="landing-card-game-label">Next</span><span style="color:#aaa">No scheduled games</span></div>`;
+  if (team.nextGame) {
+    nextGameHtml = `<div class="landing-card-game">
+      <span class="landing-card-game-label">Next</span>
+      <span>${describeNextGame(team.nextGame, team.id)}</span>
+    </div>`;
+  }
+
+  return `<a class="landing-card" href="?team=${team.id}">
+    <div class="landing-card-head">
+      <img class="landing-card-logo" src="${logo}" alt="${meta.abbr}" onerror="this.style.visibility='hidden'">
+      <div>
+        <div class="landing-card-team">${meta.name}</div>
+        <div class="landing-card-record">${recordText}</div>
+      </div>
+    </div>
+    <div class="landing-card-stats">
+      ${divName ? `<span>${divName} <strong>#${team.divisionRank ?? '–'}</strong></span>` : ''}
+      <span>L10 <strong>${team.lastTen?.wins ?? 0}–${team.lastTen?.losses ?? 0}</strong></span>
+    </div>
+    ${lastGameHtml}
+    ${nextGameHtml}
+    <div class="landing-card-cta">View dashboard →</div>
+  </a>`;
+}
+
+async function loadLanding() {
+  if (savedTeams.length === 0) {
+    document.getElementById('landing-empty').hidden = false;
+    document.getElementById('landing-grid').innerHTML = '';
+    document.getElementById('landing-add-teams-btn').addEventListener('click', openTeamManager);
+    return;
+  }
+
+  document.getElementById('landing-empty').hidden = true;
+  const grid = document.getElementById('landing-grid');
+  grid.innerHTML = '<div class="loading">Loading…</div>';
+  try {
+    const data = await fetchLandingData(savedTeams);
+    grid.innerHTML = savedTeams.map(id => renderLandingCard(data[id])).join('');
+  } catch (err) {
+    grid.innerHTML = `<div class="error">Couldn't load: ${err.message}</div>`;
+    console.error(err);
+  }
+}
+
 /* ─── Init ─── */
 
 function setSubtitle() {
@@ -1593,7 +1879,7 @@ function showError(id) {
 
 let authMode = 'login'; // 'login' | 'signup'
 
-let savedTeamIds = new Set();
+let savedTeams = [];
 
 function renderAuthArea(user) {
   const el = document.getElementById('auth-area');
@@ -1611,7 +1897,7 @@ function renderAuthArea(user) {
     document.getElementById('my-teams-btn').addEventListener('click', openTeamManager);
     loadSavedTeams();
   } else {
-    savedTeamIds = new Set();
+    savedTeams = [];
     el.innerHTML = `<button class="auth-btn" id="auth-login-btn">Log in</button>`;
     document.getElementById('auth-login-btn').addEventListener('click', () => openAuthModal('login'));
   }
@@ -1695,8 +1981,14 @@ function wireAuthModal() {
   });
 }
 
-// Subscribe to auth state changes — fires INITIAL_SESSION on load + on every sign-in/out
-sb.auth.onAuthStateChange((_event, session) => {
+// Subscribe to auth state changes
+//   INITIAL_SESSION fires on every page load — we just refresh the auth UI
+//   SIGNED_IN / SIGNED_OUT fire on user actions — full reload so view recalculates
+sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+    window.location.reload();
+    return;
+  }
   renderAuthArea(session?.user ?? null);
 });
 
@@ -1707,14 +1999,14 @@ async function loadSavedTeams() {
     .select('team_id')
     .order('display_order', { ascending: true });
   if (error) { console.error('Error loading saved teams:', error); return; }
-  savedTeamIds = new Set(data.map(r => r.team_id));
+  savedTeams = data.map(r => r.team_id);
   updateTeamCountBadge();
 }
 
 function updateTeamCountBadge() {
   const el = document.getElementById('my-teams-count');
   if (!el) return;
-  el.textContent = savedTeamIds.size > 0 ? ` (${savedTeamIds.size})` : '';
+  el.textContent = savedTeams.length > 0 ? ` (${savedTeams.length})` : '';
 }
 
 function openTeamManager() {
@@ -1739,7 +2031,7 @@ function renderTeamCheckboxes() {
   const grid = document.getElementById('teams-grid');
   const sorted = Object.entries(TEAMS).sort((a, b) => a[1].name.localeCompare(b[1].name));
   grid.innerHTML = sorted.map(([id, t]) => {
-    const checked = savedTeamIds.has(parseInt(id, 10)) ? 'checked' : '';
+    const checked = savedTeams.includes(parseInt(id, 10)) ? 'checked' : '';
     return `<label class="team-row">
       <input type="checkbox" data-team-id="${id}" ${checked}>
       <img src="https://www.mlbstatic.com/team-logos/${id}.svg" alt="" onerror="this.style.visibility='hidden'">
@@ -1772,7 +2064,7 @@ async function handleSaveTeams() {
       if (insertError) throw insertError;
     }
 
-    savedTeamIds = new Set(selectedIds);
+    savedTeams = selectedIds;
     updateTeamCountBadge();
     setTeamMessage(`Saved ${selectedIds.length} team${selectedIds.length === 1 ? '' : 's'}.`, 'info');
     setTimeout(closeTeamManager, 900);
@@ -1793,13 +2085,37 @@ function wireTeamManager() {
 }
 
 async function init() {
-  applyTeamTheme(currentTeam);
-  applyTeamIdentity(currentTeam);
   setSubtitle();
   renderTeamPicker();
   wireTeamPicker();
   wireAuthModal();
   wireTeamManager();
+
+  // Resolve auth + saved teams before deciding which view to render
+  const { data: { session } } = await sb.auth.getSession();
+  const user = session?.user ?? null;
+  renderAuthArea(user);
+  if (user) await loadSavedTeams();
+
+  const teamFromUrl = parseInt(new URL(window.location.href).searchParams.get('team'), 10);
+  const showLanding = !!user && !TEAMS[teamFromUrl] && savedTeams.length > 0;
+  const main = document.querySelector('main');
+  main.dataset.view = showLanding ? 'landing' : 'team';
+
+  if (showLanding) {
+    document.title = 'My MLB Dashboard';
+    document.getElementById('header-team-name').textContent = 'Your Teams';
+    applyTeamTheme(currentTeam); // colors still come from current/last team
+    await loadLanding();
+    return;
+  }
+
+  // Team view — either logged-out, or logged-in user with ?team= or no saved teams
+  applyTeamTheme(currentTeam);
+  applyTeamIdentity(currentTeam);
+
+  // Show "back to overview" link if logged in (lets them return to landing)
+  if (user) document.getElementById('back-to-overview').hidden = false;
 
   // Standings runs first — sets teamGamesPlayed which the season stat thresholds rely on
   await loadStandings().catch(showError('standings'));
