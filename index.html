@@ -34,15 +34,10 @@
   header {
     background: linear-gradient(135deg, var(--team-primary) 0%, var(--team-primary-dark) 65%, var(--team-primary-darker) 100%);
     color: white;
-    padding: 28px 32px;
     border-bottom: 3px solid var(--team-accent);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 24px;
     position: relative;
     border-radius: 14px 14px 0 0;
+    overflow: hidden;
   }
   header::after {
     content: '';
@@ -50,7 +45,45 @@
     inset: 0;
     background: radial-gradient(circle at 95% -30%, rgba(var(--team-accent-rgb), 0.22), transparent 55%);
     pointer-events: none;
-    border-radius: 14px 14px 0 0;
+  }
+
+  .utility-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 24px;
+    border-bottom: 1px solid rgba(255,255,255,0.14);
+    position: relative;
+    z-index: 1;
+    min-height: 44px;
+  }
+  .utility-left, .utility-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .utility-left { flex: 1; }
+  .return-link {
+    color: rgba(255,255,255,0.92);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.82em;
+    padding: 4px 10px;
+    border-radius: 6px;
+    transition: background 0.15s ease;
+  }
+  .return-link:hover { background: rgba(255,255,255,0.12); }
+
+  .team-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 22px 32px;
+    gap: 24px;
+    position: relative;
+    z-index: 1;
   }
   .header-brand {
     display: flex;
@@ -60,7 +93,7 @@
     z-index: 1;
     cursor: pointer;
     padding: 6px 12px 6px 6px;
-    margin: -6px -6px -6px -6px;
+    margin: -6px;
     border-radius: 10px;
     transition: background 0.15s ease;
     user-select: none;
@@ -534,15 +567,7 @@
   .loading { color: #888; font-style: italic; }
   .error { color: #b3261e; padding: 12px; background: #fef2f2; border-radius: 6px; }
 
-  /* ─── Auth area in header ─── */
-  .header-meta {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 10px;
-    position: relative;
-    z-index: 1;
-  }
+  /* ─── Auth area in utility bar ─── */
   .auth-area:empty { display: none; }
   .auth-btn {
     background: rgba(255,255,255,0.18);
@@ -800,19 +825,6 @@
   }
 
   /* ─── Landing page (multi-team overview) ─── */
-  .back-to-overview {
-    padding: 12px 24px;
-    font-size: 0.85em;
-    background: white;
-    border-bottom: 1px solid #f0f0f0;
-  }
-  .back-to-overview a {
-    color: var(--team-primary);
-    text-decoration: none;
-    font-weight: 700;
-  }
-  .back-to-overview a:hover { text-decoration: underline; }
-
   .landing-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
@@ -931,8 +943,19 @@
   @media (max-width: 600px) {
     body { padding: 12px; }
     main { border-radius: 12px; }
-    header { padding: 18px 16px; gap: 14px; border-radius: 12px 12px 0 0; }
-    header::after { border-radius: 12px 12px 0 0; }
+    header { border-radius: 12px 12px 0 0; }
+    .utility-bar { padding: 8px 14px; min-height: 0; }
+    .utility-left, .utility-right { gap: 6px; }
+    .return-link { font-size: 0.78em; padding: 4px 6px; }
+    .auth-email {
+      max-width: 110px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .my-teams-btn { padding: 4px 8px; }
+    .auth-logout-btn { padding: 3px 8px; font-size: 0.78em; }
+    .team-header { padding: 16px; gap: 14px; }
     .header-logo { width: 56px; height: 56px; }
     header h1 { font-size: 1.4em; }
     .header-sub { font-size: 0.78em; }
@@ -963,16 +986,23 @@
 <body>
 <main>
   <header>
-    <div class="header-brand" id="team-picker-trigger" role="button" tabindex="0">
-      <img class="header-logo" id="header-logo" src="" alt="">
-      <div>
-        <h1 id="header-team-name">Loading…</h1>
-        <p class="header-sub" id="today"></p>
+    <div class="utility-bar">
+      <div class="utility-left">
+        <a href="/" class="return-link" id="return-link" hidden>← Return to Dashboard</a>
       </div>
-      <span class="header-chevron">Switch team <span class="chevron-arrow">▾</span></span>
+      <div class="utility-right">
+        <div class="auth-area" id="auth-area"></div>
+      </div>
     </div>
-    <div class="header-meta">
-      <div class="auth-area" id="auth-area"></div>
+    <div class="team-header">
+      <div class="header-brand" id="team-picker-trigger" role="button" tabindex="0">
+        <img class="header-logo" id="header-logo" src="" alt="">
+        <div>
+          <h1 id="header-team-name">Loading…</h1>
+          <p class="header-sub" id="today"></p>
+        </div>
+        <span class="header-chevron">Switch team <span class="chevron-arrow">▾</span></span>
+      </div>
       <div class="header-record" id="header-record"></div>
     </div>
     <div class="team-picker-panel" id="team-picker-panel" hidden>
@@ -980,10 +1010,6 @@
       <div class="team-picker-grid" id="team-picker-grid"></div>
     </div>
   </header>
-
-  <div class="back-to-overview" id="back-to-overview" hidden>
-    <a href="/">← Your teams</a>
-  </div>
 
   <div id="landing-view">
     <section>
@@ -2129,8 +2155,8 @@ async function init() {
   applyTeamTheme(currentTeam);
   applyTeamIdentity(currentTeam);
 
-  // Show "back to overview" link if logged in (lets them return to landing)
-  if (user) document.getElementById('back-to-overview').hidden = false;
+  // Show "Return to Dashboard" link if logged in (lets them return to landing from a team page)
+  if (user) document.getElementById('return-link').hidden = false;
 
   // Standings runs first — sets teamGamesPlayed which the season stat thresholds rely on
   await loadStandings().catch(showError('standings'));
