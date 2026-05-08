@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MLB Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin="" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
 <style>
   :root {
     /* Default = MLB league colors. Used for the loading flash and the landing page. */
@@ -1135,13 +1141,123 @@
   }
 
   /* View-based show/hide */
-  main[data-view="landing"] #team-view { display: none; }
-  main[data-view="team"]    #landing-view { display: none; }
-  main[data-view="landing"] .header-logo { display: none; }
-  main[data-view="landing"] .header-record { display: none; }
-  main[data-view="landing"] .header-chevron { display: none; }
-  main[data-view="landing"] .header-brand { cursor: default; }
-  main[data-view="landing"] .header-brand:hover { background: transparent; }
+  main[data-view="landing"]    #team-view,
+  main[data-view="landing"]    #attendance-view { display: none; }
+  main[data-view="team"]       #landing-view,
+  main[data-view="team"]       #attendance-view { display: none; }
+  main[data-view="attendance"] #team-view,
+  main[data-view="attendance"] #landing-view { display: none; }
+
+  main[data-view="landing"] .header-logo,
+  main[data-view="landing"] .header-record,
+  main[data-view="landing"] .header-chevron,
+  main[data-view="attendance"] .header-logo,
+  main[data-view="attendance"] .header-record,
+  main[data-view="attendance"] .header-chevron { display: none; }
+
+  main[data-view="landing"] .header-brand,
+  main[data-view="attendance"] .header-brand { cursor: default; }
+  main[data-view="landing"] .header-brand:hover,
+  main[data-view="attendance"] .header-brand:hover { background: transparent; }
+
+  /* ─── Attendance view ─── */
+  .attendance-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+  .attendance-stat {
+    background: #fafafa;
+    border: 1px solid #ececec;
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .attendance-stat-label {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 700;
+    color: #777;
+    margin-bottom: 6px;
+  }
+  .attendance-stat-value {
+    font-size: 1.75em;
+    font-weight: 800;
+    color: var(--team-primary);
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+  .attendance-stat-value .denom { color: #aaa; font-size: 0.6em; font-weight: 600; }
+  .attendance-hint {
+    color: #666;
+    font-size: 0.9em;
+    margin: 0 0 12px;
+  }
+  #stadium-map {
+    height: 520px;
+    border-radius: 10px;
+    border: 1px solid #ececec;
+    background: #fafafa;
+  }
+
+  /* Stadium marker (Leaflet divIcon) */
+  .stadium-marker {
+    background: rgba(220,220,220,0.95);
+    border-radius: 50%;
+    border: 2px solid rgba(120,120,120,0.5);
+    width: 36px !important;
+    height: 36px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    filter: grayscale(0.8);
+    transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
+    position: relative;
+  }
+  .stadium-marker:hover {
+    transform: scale(1.18);
+    filter: grayscale(0);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    z-index: 1000 !important;
+  }
+  .stadium-marker img {
+    width: 26px;
+    height: 26px;
+    object-fit: contain;
+    pointer-events: none;
+  }
+  .stadium-marker.visited {
+    background: white;
+    border-color: #1a7a3a;
+    filter: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  }
+  .stadium-marker.visited::after {
+    content: '✓';
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #1a7a3a;
+    color: white;
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    border: 2px solid white;
+  }
+
+  /* Utility-bar nav link (shared by Return to Dashboard + Stadiums link) */
+  .utility-link {
+    color: rgba(255,255,255,0.92);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.82em;
+    padding: 4px 10px;
+    border-radius: 6px;
+    transition: background 0.15s ease;
+  }
+  .utility-link:hover { background: rgba(255,255,255,0.12); }
 
   /* ─── Mobile tweaks ─── */
   @media (max-width: 600px) {
@@ -1197,6 +1313,7 @@
           <span aria-hidden="true">←</span>
           <span class="return-label">Return to Dashboard</span>
         </a>
+        <a href="/?view=attendance" class="utility-link" id="stadiums-link" hidden>My Stadiums</a>
       </div>
       <div class="utility-right">
         <div class="auth-area" id="auth-area"></div>
@@ -1246,6 +1363,19 @@
         <p>You haven't saved any teams yet.</p>
         <button id="landing-add-teams-btn">Pick your teams</button>
       </div>
+    </section>
+  </div>
+
+  <div id="attendance-view" hidden>
+    <section>
+      <h2>My Attendance</h2>
+      <div id="attendance-stats" class="loading">Loading…</div>
+    </section>
+
+    <section>
+      <h2>Stadiums Visited</h2>
+      <p class="attendance-hint">Click a stadium to mark it as visited. Click again to remove.</p>
+      <div id="stadium-map"></div>
     </section>
   </div>
 
@@ -2496,6 +2626,152 @@ async function loadLanding() {
   }
 }
 
+/* ─── Attendance view: stadium map + stats ─── */
+
+const STADIUMS = {
+  108: { name: 'Angel Stadium',                city: 'Anaheim, CA',         lat: 33.8003, lng: -117.8827 },
+  109: { name: 'Chase Field',                  city: 'Phoenix, AZ',         lat: 33.4453, lng: -112.0667 },
+  110: { name: 'Oriole Park at Camden Yards',  city: 'Baltimore, MD',       lat: 39.2839, lng: -76.6217 },
+  111: { name: 'Fenway Park',                  city: 'Boston, MA',          lat: 42.3467, lng: -71.0972 },
+  112: { name: 'Wrigley Field',                city: 'Chicago, IL',         lat: 41.9484, lng: -87.6553 },
+  113: { name: 'Great American Ball Park',     city: 'Cincinnati, OH',      lat: 39.0975, lng: -84.5070 },
+  114: { name: 'Progressive Field',            city: 'Cleveland, OH',       lat: 41.4962, lng: -81.6852 },
+  115: { name: 'Coors Field',                  city: 'Denver, CO',          lat: 39.7559, lng: -104.9942 },
+  116: { name: 'Comerica Park',                city: 'Detroit, MI',         lat: 42.3390, lng: -83.0485 },
+  117: { name: 'Daikin Park',                  city: 'Houston, TX',         lat: 29.7572, lng:  -95.3553 },
+  118: { name: 'Kauffman Stadium',             city: 'Kansas City, MO',     lat: 39.0517, lng:  -94.4803 },
+  119: { name: 'Dodger Stadium',               city: 'Los Angeles, CA',     lat: 34.0739, lng: -118.2400 },
+  120: { name: 'Nationals Park',               city: 'Washington, DC',      lat: 38.8730, lng:  -77.0074 },
+  121: { name: 'Citi Field',                   city: 'Queens, NY',          lat: 40.7571, lng:  -73.8458 },
+  133: { name: 'Sutter Health Park',           city: 'Sacramento, CA',      lat: 38.5805, lng: -121.5128 },
+  134: { name: 'PNC Park',                     city: 'Pittsburgh, PA',      lat: 40.4469, lng:  -80.0058 },
+  135: { name: 'Petco Park',                   city: 'San Diego, CA',       lat: 32.7073, lng: -117.1566 },
+  136: { name: 'T-Mobile Park',                city: 'Seattle, WA',         lat: 47.5914, lng: -122.3325 },
+  137: { name: 'Oracle Park',                  city: 'San Francisco, CA',   lat: 37.7786, lng: -122.3893 },
+  138: { name: 'Busch Stadium',                city: 'St. Louis, MO',       lat: 38.6226, lng:  -90.1928 },
+  139: { name: 'Tropicana Field',              city: 'St. Petersburg, FL',  lat: 27.7682, lng:  -82.6534 },
+  140: { name: 'Globe Life Field',             city: 'Arlington, TX',       lat: 32.7473, lng:  -97.0825 },
+  141: { name: 'Rogers Centre',                city: 'Toronto, ON',         lat: 43.6414, lng:  -79.3894 },
+  142: { name: 'Target Field',                 city: 'Minneapolis, MN',     lat: 44.9817, lng:  -93.2776 },
+  143: { name: 'Citizens Bank Park',           city: 'Philadelphia, PA',    lat: 39.9061, lng:  -75.1665 },
+  144: { name: 'Truist Park',                  city: 'Atlanta, GA',         lat: 33.8908, lng:  -84.4677 },
+  145: { name: 'Rate Field',                   city: 'Chicago, IL',         lat: 41.8300, lng:  -87.6339 },
+  146: { name: 'loanDepot park',               city: 'Miami, FL',           lat: 25.7779, lng:  -80.2197 },
+  147: { name: 'Yankee Stadium',               city: 'Bronx, NY',           lat: 40.8296, lng:  -73.9262 },
+  158: { name: 'American Family Field',        city: 'Milwaukee, WI',       lat: 43.0280, lng:  -87.9712 },
+};
+
+let visitedStadiums = new Set();
+let stadiumMap = null;
+const stadiumMarkers = {};
+
+function createStadiumIcon(teamId, visited) {
+  const team = TEAMS[teamId];
+  const cls = `stadium-marker ${visited ? 'visited' : ''}`;
+  return L.divIcon({
+    className: cls,
+    html: `<img src="https://www.mlbstatic.com/team-logos/${teamId}.svg" alt="${team.abbr}">`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+  });
+}
+
+function renderStadiumMap() {
+  if (stadiumMap) { stadiumMap.remove(); stadiumMap = null; }
+
+  // Center on continental US, zoom out enough to include Toronto and Miami
+  stadiumMap = L.map('stadium-map', { scrollWheelZoom: false }).setView([39.5, -96.0], 4);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 19,
+  }).addTo(stadiumMap);
+
+  for (const [idStr, stadium] of Object.entries(STADIUMS)) {
+    const teamId = parseInt(idStr, 10);
+    const team = TEAMS[teamId];
+    if (!team) continue;
+    const visited = visitedStadiums.has(teamId);
+    const marker = L.marker([stadium.lat, stadium.lng], {
+      icon: createStadiumIcon(teamId, visited),
+      title: `${team.name} — ${stadium.name}`,
+    }).addTo(stadiumMap);
+
+    marker.bindTooltip(`<strong>${stadium.name}</strong><br>${team.name}<br><span style="opacity:0.7">${stadium.city}</span>`, {
+      direction: 'top',
+      offset: [0, -10],
+    });
+
+    marker.on('click', () => onStadiumClick(teamId));
+    stadiumMarkers[teamId] = marker;
+  }
+}
+
+async function onStadiumClick(teamId) {
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return;
+
+  const wasVisited = visitedStadiums.has(teamId);
+  try {
+    if (wasVisited) {
+      const { error } = await sb.from('attended_stadiums')
+        .delete().eq('user_id', user.id).eq('team_id', teamId);
+      if (error) throw error;
+      visitedStadiums.delete(teamId);
+    } else {
+      const { error } = await sb.from('attended_stadiums')
+        .insert({ user_id: user.id, team_id: teamId });
+      if (error) throw error;
+      visitedStadiums.add(teamId);
+    }
+  } catch (e) {
+    console.error('Stadium toggle failed:', e);
+    return;
+  }
+
+  // Update marker icon and stats
+  stadiumMarkers[teamId]?.setIcon(createStadiumIcon(teamId, !wasVisited));
+  renderAttendanceStats();
+}
+
+function renderAttendanceStats() {
+  const stadiumCount = visitedStadiums.size;
+  // For now teams seen = stadiums visited (each stadium = its home team).
+  // In 4b we'll fold in away teams from the games log.
+  const teamsSeen = visitedStadiums.size;
+
+  document.getElementById('attendance-stats').classList.remove('loading');
+  document.getElementById('attendance-stats').innerHTML = `
+    <div class="attendance-stats">
+      <div class="attendance-stat">
+        <div class="attendance-stat-label">Stadiums Visited</div>
+        <div class="attendance-stat-value">${stadiumCount}<span class="denom"> / 30</span></div>
+      </div>
+      <div class="attendance-stat">
+        <div class="attendance-stat-label">Teams Seen</div>
+        <div class="attendance-stat-value">${teamsSeen}<span class="denom"> / 30</span></div>
+      </div>
+      <div class="attendance-stat">
+        <div class="attendance-stat-label">Games Logged</div>
+        <div class="attendance-stat-value">0<span class="denom"> (coming soon)</span></div>
+      </div>
+    </div>
+  `;
+}
+
+async function loadAttendance() {
+  const { data, error } = await sb.from('attended_stadiums').select('team_id');
+  if (error) {
+    console.error('Load attended stadiums failed:', error);
+    visitedStadiums = new Set();
+  } else {
+    visitedStadiums = new Set(data.map(r => r.team_id));
+  }
+  renderAttendanceStats();
+  renderStadiumMap();
+}
+
 /* ─── Init ─── */
 
 function setSubtitle() {
@@ -2756,12 +3032,34 @@ async function init() {
     try { await loadSavedTeams(); } catch (err) { console.error('Saved teams load failed:', err); }
   }
 
-  const teamFromUrl = parseInt(new URL(window.location.href).searchParams.get('team'), 10);
-  const showLanding = !!user && !TEAMS[teamFromUrl] && savedTeams.length > 0;
-  const main = document.querySelector('main');
-  main.dataset.view = showLanding ? 'landing' : 'team';
+  const params = new URL(window.location.href).searchParams;
+  const teamFromUrl = parseInt(params.get('team'), 10);
+  const viewFromUrl = params.get('view');
 
-  if (showLanding) {
+  let view;
+  if (user && viewFromUrl === 'attendance') view = 'attendance';
+  else if (TEAMS[teamFromUrl])               view = 'team';
+  else if (user && savedTeams.length > 0)    view = 'landing';
+  else                                        view = 'team';
+
+  const main = document.querySelector('main');
+  main.dataset.view = view;
+
+  // Utility-bar nav links: visible based on which view we're on
+  if (user) {
+    if (view !== 'landing')    document.getElementById('return-link').hidden = false;
+    if (view !== 'attendance') document.getElementById('stadiums-link').hidden = false;
+  }
+
+  if (view === 'attendance') {
+    document.title = '162-0 · My Stadiums';
+    document.getElementById('header-team-name').textContent = 'My Stadiums';
+    // Default MLB blue/red theme — no team-specific colors here
+    await loadAttendance();
+    return;
+  }
+
+  if (view === 'landing') {
     document.title = '162-0 · MLB Dashboard';
     document.getElementById('header-team-name').textContent = 'Your Teams';
     // Don't apply team theme — landing keeps the default MLB blue/red palette
@@ -2772,9 +3070,6 @@ async function init() {
   // Team view — either logged-out, or logged-in user with ?team= or no saved teams
   applyTeamTheme(currentTeam);
   applyTeamIdentity(currentTeam);
-
-  // Show "Return to Dashboard" link if logged in (lets them return to landing from a team page)
-  if (user) document.getElementById('return-link').hidden = false;
 
   // Standings runs first — sets teamGamesPlayed which the season stat thresholds rely on
   await loadStandings().catch(showError('standings'));
