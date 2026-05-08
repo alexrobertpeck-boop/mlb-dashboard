@@ -886,7 +886,7 @@
   .heatmap-wrap {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
   }
   .heatmap-scroll {
     overflow-x: auto;
@@ -894,14 +894,13 @@
   }
   .heatmap-grid {
     display: grid;
-    grid-template-rows: 12px repeat(7, 14px);
-    grid-auto-columns: 14px;
-    gap: 3px;
+    grid-template-rows: 18px repeat(7, 22px);
+    gap: 4px;
     min-width: max-content;
   }
   .heatmap-month {
     grid-row: 1;
-    font-size: 0.7em;
+    font-size: 0.78em;
     color: #888;
     font-weight: 600;
     letter-spacing: 0.4px;
@@ -910,17 +909,17 @@
     padding-bottom: 2px;
   }
   .heatmap-cell {
-    width: 14px;
-    height: 14px;
-    border-radius: 3px;
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
     background: #ebedf0;
     cursor: default;
   }
-  .heatmap-cell.win { background: #1a7a3a; }
-  .heatmap-cell.loss { background: #b3261e; }
-  .heatmap-cell.split { background: #c2873d; }
+  .heatmap-cell.win { background: #a3d4ae; }
+  .heatmap-cell.loss { background: #e8a8a8; }
+  .heatmap-cell.split { background: #e8c89a; }
   .heatmap-cell.scheduled { background: #d4d4d8; }
-  .heatmap-cell.other { background: #999; }
+  .heatmap-cell.other { background: #b0b0b0; }
   .heatmap-cell.today {
     outline: 2px solid var(--team-primary);
     outline-offset: 1px;
@@ -1742,9 +1741,14 @@ function renderHeatmap(games) {
 
   const numColumns = Math.ceil((startDow + totalDayCount) / 7);
 
-  const monthLabels = [...monthFirstCol.values()].map(m =>
-    `<div class="heatmap-month" style="grid-column-start: ${m.col};">${m.name}</div>`
-  );
+  // Each month label spans from its first column to the next month's first column,
+  // so the text has horizontal room and labels don't overlap.
+  const monthArr = [...monthFirstCol.values()];
+  const monthLabels = monthArr.map((m, i) => {
+    const nextCol = monthArr[i + 1]?.col ?? (numColumns + 1);
+    const span = Math.max(1, nextCol - m.col);
+    return `<div class="heatmap-month" style="grid-column: ${m.col} / span ${span};">${m.name}</div>`;
+  });
 
   const finished = games.filter(g => {
     const k = classifyGame(g).kind;
@@ -1764,11 +1768,11 @@ function renderHeatmap(games) {
         </div>
       </div>
       <div class="heatmap-legend">
-        <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#1a7a3a"></span>Win</span>
-        <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#b3261e"></span>Loss</span>
-        <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#c2873d"></span>Split DH</span>
+        <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#a3d4ae"></span>Win</span>
+        <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#e8a8a8"></span>Loss</span>
+        <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#e8c89a"></span>Split DH</span>
         <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#d4d4d8"></span>Scheduled</span>
-        <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#999"></span>PPD/CXL</span>
+        <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#b0b0b0"></span>PPD/CXL</span>
         <span class="heatmap-legend-item"><span class="heatmap-legend-swatch"></span>Off day</span>
       </div>
     </div>
