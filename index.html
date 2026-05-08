@@ -636,8 +636,15 @@
   </section>
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const API_BASE = 'https://statsapi.mlb.com/api/v1';
+
+/* ─── Supabase client ─── */
+const SUPABASE_URL = 'https://xyrrqjqdyuhqqcwwusqn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_gDTaHZguPUrEWsSdmCEzQA_7dSWXSMo';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+window.sb = sb; // expose for console debugging
 
 /* ─── Team config: id → metadata ─── */
 const TEAMS = {
@@ -1273,6 +1280,12 @@ function showError(id) {
 }
 
 async function init() {
+  // Sanity check: confirm Supabase client is reachable
+  sb.auth.getSession().then(({ data, error }) => {
+    if (error) console.error('Supabase auth error:', error);
+    else console.log('Supabase connected. Session:', data.session ? `logged in as ${data.session.user.email}` : 'not logged in');
+  });
+
   applyTeamTheme(currentTeam);
   applyTeamIdentity(currentTeam);
   setSubtitle();
