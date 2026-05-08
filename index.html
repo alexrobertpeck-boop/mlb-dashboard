@@ -1982,11 +1982,18 @@ function wireAuthModal() {
 }
 
 // Subscribe to auth state changes
-//   INITIAL_SESSION fires on every page load — we just refresh the auth UI
-//   SIGNED_IN / SIGNED_OUT fire on user actions — full reload so view recalculates
+//   First event after page load (INITIAL_SESSION or equivalent first fire): just render
+//   Subsequent SIGNED_IN / SIGNED_OUT: navigate to / so the right view recalculates
+//   Anything else (TOKEN_REFRESHED, USER_UPDATED): just refresh the auth UI
+let authStateInitialized = false;
 sb.auth.onAuthStateChange((event, session) => {
+  if (!authStateInitialized) {
+    authStateInitialized = true;
+    renderAuthArea(session?.user ?? null);
+    return;
+  }
   if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
-    window.location.reload();
+    window.location.href = '/';
     return;
   }
   renderAuthArea(session?.user ?? null);
@@ -2091,11 +2098,19 @@ async function init() {
   wireAuthModal();
   wireTeamManager();
 
-  // Resolve auth + saved teams before deciding which view to render
-  const { data: { session } } = await sb.auth.getSession();
-  const user = session?.user ?? null;
+  // Resolve auth + saved teams before deciding which view to render.
+  // Both wrapped: a hung Supabase shouldn't leave the whole page in "Loading…".
+  let user = null;
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    user = session?.user ?? null;
+  } catch (err) {
+    console.error('Session check failed:', err);
+  }
   renderAuthArea(user);
-  if (user) await loadSavedTeams();
+  if (user) {
+    try { await loadSavedTeams(); } catch (err) { console.error('Saved teams load failed:', err); }
+  }
 
   const teamFromUrl = parseInt(new URL(window.location.href).searchParams.get('team'), 10);
   const showLanding = !!user && !TEAMS[teamFromUrl] && savedTeams.length > 0;
