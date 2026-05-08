@@ -6,12 +6,13 @@
 <title>MLB Dashboard</title>
 <style>
   :root {
-    --team-primary: #33006F;
-    --team-primary-dark: #1f0044;
-    --team-primary-darker: #0f0024;
-    --team-accent: #C4CED4;
-    --team-primary-rgb: 51, 0, 111;
-    --team-accent-rgb: 196, 206, 212;
+    /* Default = MLB league colors. Used for the loading flash and the landing page. */
+    --team-primary: #002D72;
+    --team-primary-dark: #001a44;
+    --team-primary-darker: #00072a;
+    --team-accent: #BF0D3E;
+    --team-primary-rgb: 0, 45, 114;
+    --team-accent-rgb: 191, 13, 62;
   }
   * { box-sizing: border-box; }
   body {
@@ -1214,7 +1215,7 @@ function applyTeamTheme(team) {
 }
 
 function applyTeamIdentity(team) {
-  document.title = `${team.name} Dashboard`;
+  document.title = `162-0 · ${team.short}`;
   document.getElementById('header-team-name').textContent = team.name;
   document.getElementById('header-logo').src = `https://www.mlbstatic.com/team-logos/${currentTeamId}.svg`;
   document.getElementById('header-logo').alt = team.abbr;
@@ -1336,7 +1337,7 @@ function renderGame(g) {
   if (!resultHtml) resultHtml = '<div class="result"></div>';
 
   const pitcherBlock = i.teamPitcher?.fullName
-    ? `<div class="pitcher" title="${i.teamPitcher.fullName}"><span class="pitcher-label">SP</span>${shortName(i.teamPitcher.fullName)}</div>`
+    ? `<div class="pitcher" title="${i.teamPitcher.fullName}">${shortName(i.teamPitcher.fullName)}</div>`
     : '';
 
   return `<div class="game-cell">
@@ -1889,7 +1890,7 @@ async function loadLanding() {
 
 function setSubtitle() {
   document.getElementById('today').textContent =
-    'Dashboard · ' + new Date().toLocaleDateString(undefined, {
+    new Date().toLocaleDateString(undefined, {
       weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
     });
 }
@@ -2148,9 +2149,9 @@ async function init() {
   main.dataset.view = showLanding ? 'landing' : 'team';
 
   if (showLanding) {
-    document.title = 'My MLB Dashboard';
+    document.title = '162-0 · MLB Dashboard';
     document.getElementById('header-team-name').textContent = 'Your Teams';
-    applyTeamTheme(currentTeam); // colors still come from current/last team
+    // Don't apply team theme — landing keeps the default MLB blue/red palette
     await loadLanding();
     return;
   }
