@@ -2719,25 +2719,25 @@ function renderStadiumMap() {
 // where the marker should DRAW. The leader line connects display → actual.
 // Tuned per-pair for visual harmony rather than computed automatically.
 const STADIUM_OFFSETS = {
-  // LA basin (Dodgers + Angels)
-  119: { dlat:  1.5, dlng: -1.5 },  // LAD: pushed NW
-  108: { dlat: -1.5, dlng:  1.5 },  // LAA: pushed SE
+  // LA basin: LAA pushed E (avoid SD which is south); LAD pushed N (mountains)
+  119: { dlat:  2.0, dlng: -1.0 },  // LAD: N (toward mountains)
+  108: { dlat: -1.0, dlng:  2.2 },  // LAA: E (toward desert/AZ, away from SD)
 
-  // Mid-Atlantic (Orioles + Nationals)
-  110: { dlat:  1.4, dlng:  1.4 },  // BAL: pushed NE
-  120: { dlat: -1.4, dlng: -1.4 },  // WSH: pushed SW
+  // East Coast quintet: NYY, NYM, PHI, BAL, WSH all crowd each other.
+  // Fan them out radially: NYY=N, NYM=NE, PHI=SE (offshore), BAL=NW, WSH=SW.
+  147: { dlat:  2.5, dlng: -0.8 },  // NYY: N (Hudson Valley)
+  121: { dlat:  0.6, dlng:  1.7 },  // NYM: E (Long Island)
+  143: { dlat: -1.4, dlng:  1.7 },  // PHI: SE (Atlantic, offshore Delaware)
+  110: { dlat:  1.6, dlng: -1.6 },  // BAL: NW (central PA)
+  120: { dlat: -1.8, dlng: -1.6 },  // WSH: SW (Virginia)
 
-  // Chicago (Cubs + White Sox)
-  112: { dlat:  1.5, dlng: -1.0 },  // CHC: pushed NW
-  145: { dlat: -1.5, dlng:  1.0 },  // CWS: pushed SE
+  // Great Lakes: push CHC east (Michigan) and CWS south (Indiana) to clear MIL
+  112: { dlat:  0.5, dlng:  2.0 },  // CHC: E (Michigan)
+  145: { dlat: -2.0, dlng:  0.6 },  // CWS: S (Indiana)
 
-  // NYC (Yankees + Mets)
-  147: { dlat:  1.5, dlng: -1.5 },  // NYY: pushed NW (toward Hudson Valley)
-  121: { dlat: -0.5, dlng:  1.7 },  // NYM: pushed E (toward Long Island)
-
-  // Bay Area (Giants + Athletics)
-  137: { dlat: -0.7, dlng: -1.5 },  // SF: pushed SW (Pacific)
-  133: { dlat:  1.5, dlng:  1.5 },  // ATH: pushed NE (Sierras)
+  // Bay Area
+  137: { dlat: -0.7, dlng: -1.5 },  // SF: SW (Pacific)
+  133: { dlat:  1.5, dlng:  1.5 },  // ATH: NE (Sierras)
 };
 
 async function onStadiumClick(teamId) {
