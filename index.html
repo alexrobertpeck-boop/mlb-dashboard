@@ -1413,10 +1413,12 @@ async function loadSchedule() {
 function seasonHittingCategories() {
   const minPA = Math.max(Math.round(teamGamesPlayed * 2.3), 25);
   return [
-    { key: 'avg',      label: 'AVG', format: 'pct',    min: { plateAppearances: minPA } },
-    { key: 'homeRuns', label: 'HR',  format: 'int' },
-    { key: 'rbi',      label: 'RBI', format: 'int' },
-    { key: 'ops',      label: 'OPS', format: 'pct',    min: { plateAppearances: minPA } },
+    { key: 'avg',      label: 'AVG',  format: 'pct',    min: { plateAppearances: minPA } },
+    { key: 'homeRuns', label: 'HR',   format: 'int' },
+    { key: 'rbi',      label: 'RBI',  format: 'int' },
+    { key: 'ops',      label: 'OPS',  format: 'pct',    min: { plateAppearances: minPA } },
+    { key: 'wRcPlus',  label: 'wRC+', format: 'int',    min: { plateAppearances: minPA } },
+    { key: 'war',      label: 'WAR',  format: 'fixed1' },
   ];
 }
 
@@ -1427,6 +1429,8 @@ function seasonPitchingCategories() {
     { key: 'strikeOuts', label: 'K',    format: 'int' },
     { key: 'wins',       label: 'W',    format: 'int' },
     { key: 'whip',       label: 'WHIP', format: 'fixed2', asc: true, min: { inningsPitched: minIP } },
+    { key: 'fip',        label: 'FIP',  format: 'fixed2', asc: true, min: { inningsPitched: minIP } },
+    { key: 'war',        label: 'WAR',  format: 'fixed1' },
   ];
 }
 
@@ -1486,6 +1490,8 @@ function formatStatValue(val, format) {
   if (Number.isNaN(num)) return String(val);
   if (format === 'pct') return num >= 1 ? num.toFixed(3) : num.toFixed(3).replace(/^0/, '');
   if (format === 'fixed2') return num.toFixed(2);
+  if (format === 'fixed1') return num.toFixed(1);
+  if (format === 'int') return String(Math.round(num));
   return String(val);
 }
 
@@ -1522,8 +1528,26 @@ async function loadStatBox(elementId, fetchOpts, categories) {
   el.innerHTML = categories.map(c => renderStatCard(c, getLeader(splits, c))).join('');
 }
 
-const loadSeasonHitting  = () => loadStatBox('season-hitting',  { group: 'hitting',  type: 'season' },      seasonHittingCategories());
-const loadSeasonPitching = () => loadStatBox('season-pitching', { group: 'pitching', type: 'season' },      seasonPitchingCategories());
+// For season stats we fetch BOTH the regular per-player stats AND the sabermetrics
+// stats, then merge them keyed by player ID. This way each player's stat object
+// contains AVG/OPS/etc. (from the season fetch) AND wRC+/WAR/FIP/etc. (from sabermetrics).
+async function loadSeasonStatBox(elementId, group, categories) {
+  const [season, saber] = await Promise.all([
+    fetchPlayerStats({ group, type: 'season' }),
+    fetchPlayerStats({ group, type: 'sabermetrics' }),
+  ]);
+  const saberByPlayer = new Map(saber.map(s => [s.player.id, s.stat]));
+  const splits = season.map(s => ({
+    ...s,
+    stat: { ...s.stat, ...(saberByPlayer.get(s.player.id) || {}) },
+  }));
+  const el = document.getElementById(elementId);
+  el.classList.remove('loading');
+  el.innerHTML = categories.map(c => renderStatCard(c, getLeader(splits, c))).join('');
+}
+
+const loadSeasonHitting  = () => loadSeasonStatBox('season-hitting',  'hitting',  seasonHittingCategories());
+const loadSeasonPitching = () => loadSeasonStatBox('season-pitching', 'pitching', seasonPitchingCategories());
 const loadHotHitting     = () => loadStatBox('hot-hitting',     { group: 'hitting',  type: 'byDateRange', startDate: isoDate(-10), endDate: isoDate(0) }, HOT_HITTING);
 const loadHotPitching    = () => loadStatBox('hot-pitching',    { group: 'pitching', type: 'byDateRange', startDate: isoDate(-10), endDate: isoDate(0) }, HOT_PITCHING);
 
