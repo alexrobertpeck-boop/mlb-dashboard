@@ -1143,6 +1143,8 @@
   main[data-view="team"]       #attendance-view { display: none; }
   main[data-view="attendance"] #team-view,
   main[data-view="attendance"] #landing-view { display: none; }
+  /* Override the HTML `hidden` attribute when this view is active */
+  main[data-view="attendance"] #attendance-view { display: block; }
 
   main[data-view="landing"] .header-logo,
   main[data-view="landing"] .header-record,
