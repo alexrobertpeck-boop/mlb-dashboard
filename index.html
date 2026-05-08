@@ -534,6 +534,159 @@
   .loading { color: #888; font-style: italic; }
   .error { color: #b3261e; padding: 12px; background: #fef2f2; border-radius: 6px; }
 
+  /* ─── Auth area in header ─── */
+  .header-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    position: relative;
+    z-index: 1;
+  }
+  .auth-area:empty { display: none; }
+  .auth-btn {
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 999px;
+    padding: 7px 14px;
+    font-size: 0.72em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: white;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .auth-btn:hover {
+    background: rgba(255,255,255,0.3);
+    border-color: rgba(255,255,255,0.6);
+  }
+  .auth-user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.78em;
+    color: rgba(255,255,255,0.9);
+  }
+  .auth-email { font-weight: 600; }
+  .auth-logout-btn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.35);
+    border-radius: 999px;
+    padding: 4px 10px;
+    color: white;
+    font-size: 0.85em;
+    cursor: pointer;
+  }
+  .auth-logout-btn:hover { background: rgba(255,255,255,0.15); }
+
+  /* ─── Auth modal ─── */
+  .auth-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .auth-modal[hidden] { display: none; }
+  .auth-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(2px);
+    cursor: pointer;
+  }
+  .auth-modal-content {
+    position: relative;
+    background: white;
+    border-radius: 14px;
+    padding: 32px 28px 24px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .auth-modal-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    cursor: pointer;
+    color: #999;
+    line-height: 1;
+    padding: 4px 8px;
+  }
+  .auth-modal-close:hover { color: #333; }
+  .auth-modal h2 {
+    margin: 0 0 20px;
+    font-size: 1.4em;
+    color: var(--team-primary);
+  }
+  .auth-form label {
+    display: block;
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 700;
+    color: #555;
+    margin: 12px 0 4px;
+  }
+  .auth-form input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 16px; /* 16px prevents iOS zoom-on-focus */
+    font-family: inherit;
+  }
+  .auth-form input:focus {
+    outline: none;
+    border-color: var(--team-primary);
+    box-shadow: 0 0 0 3px rgba(var(--team-primary-rgb), 0.15);
+  }
+  .auth-submit {
+    width: 100%;
+    padding: 12px;
+    background: var(--team-primary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.95em;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 18px;
+    transition: background 0.15s ease;
+  }
+  .auth-submit:hover { background: var(--team-primary-dark); }
+  .auth-submit:disabled { opacity: 0.6; cursor: wait; }
+  .auth-message {
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 0.88em;
+    margin-top: 14px;
+  }
+  .auth-message.error { background: #fef2f2; color: #b3261e; }
+  .auth-message.info { background: #ecfdf5; color: #065f46; }
+  .auth-toggle {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 0.88em;
+    color: #666;
+  }
+  .auth-toggle button {
+    background: none;
+    border: none;
+    color: var(--team-primary);
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0 4px;
+    font-size: 1em;
+    font-family: inherit;
+  }
+
   /* ─── Mobile tweaks ─── */
   @media (max-width: 600px) {
     body { padding: 12px; }
@@ -578,7 +731,10 @@
       </div>
       <span class="header-chevron">Switch team <span class="chevron-arrow">▾</span></span>
     </div>
-    <div class="header-record" id="header-record"></div>
+    <div class="header-meta">
+      <div class="auth-area" id="auth-area"></div>
+      <div class="header-record" id="header-record"></div>
+    </div>
     <div class="team-picker-panel" id="team-picker-panel" hidden>
       <div class="team-picker-title">Choose a team</div>
       <div class="team-picker-grid" id="team-picker-grid"></div>
@@ -635,6 +791,26 @@
     <div id="playoff-odds" class="loading">Loading…</div>
   </section>
 </main>
+
+<div class="auth-modal" id="auth-modal" hidden>
+  <div class="auth-modal-backdrop"></div>
+  <div class="auth-modal-content">
+    <button class="auth-modal-close" id="auth-modal-close" aria-label="Close">×</button>
+    <h2 id="auth-modal-title">Log in</h2>
+    <form class="auth-form" id="auth-form">
+      <label for="auth-email">Email</label>
+      <input type="email" id="auth-email" autocomplete="email" required>
+      <label for="auth-password">Password</label>
+      <input type="password" id="auth-password" autocomplete="current-password" required minlength="6">
+      <div class="auth-message" id="auth-message" hidden></div>
+      <button type="submit" class="auth-submit" id="auth-submit">Log in</button>
+    </form>
+    <div class="auth-toggle">
+      <span id="auth-toggle-text">Don't have an account?</span>
+      <button type="button" id="auth-toggle-btn">Sign up</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -1279,18 +1455,107 @@ function showError(id) {
   };
 }
 
-async function init() {
-  // Sanity check: confirm Supabase client is reachable
-  sb.auth.getSession().then(({ data, error }) => {
-    if (error) console.error('Supabase auth error:', error);
-    else console.log('Supabase connected. Session:', data.session ? `logged in as ${data.session.user.email}` : 'not logged in');
-  });
+/* ─── Auth (email + password) ─── */
 
+let authMode = 'login'; // 'login' | 'signup'
+
+function renderAuthArea(user) {
+  const el = document.getElementById('auth-area');
+  if (user) {
+    el.innerHTML = `
+      <div class="auth-user-info">
+        <span class="auth-email">${user.email}</span>
+        <button class="auth-logout-btn" id="auth-logout-btn">Log out</button>
+      </div>
+    `;
+    document.getElementById('auth-logout-btn').addEventListener('click', async () => {
+      await sb.auth.signOut();
+    });
+  } else {
+    el.innerHTML = `<button class="auth-btn" id="auth-login-btn">Log in</button>`;
+    document.getElementById('auth-login-btn').addEventListener('click', () => openAuthModal('login'));
+  }
+}
+
+function openAuthModal(mode) {
+  authMode = mode;
+  updateAuthModalUI();
+  document.getElementById('auth-modal').hidden = false;
+  document.getElementById('auth-email').focus();
+}
+
+function closeAuthModal() {
+  document.getElementById('auth-modal').hidden = true;
+  document.getElementById('auth-form').reset();
+  setAuthMessage(null);
+}
+
+function setAuthMessage(text, type = 'error') {
+  const el = document.getElementById('auth-message');
+  if (!text) { el.hidden = true; return; }
+  el.textContent = text;
+  el.className = `auth-message ${type}`;
+  el.hidden = false;
+}
+
+function updateAuthModalUI() {
+  const isLogin = authMode === 'login';
+  document.getElementById('auth-modal-title').textContent = isLogin ? 'Log in' : 'Sign up';
+  document.getElementById('auth-submit').textContent = isLogin ? 'Log in' : 'Sign up';
+  document.getElementById('auth-toggle-text').textContent = isLogin ? "Don't have an account?" : 'Already have an account?';
+  document.getElementById('auth-toggle-btn').textContent = isLogin ? 'Sign up' : 'Log in';
+  document.getElementById('auth-password').autocomplete = isLogin ? 'current-password' : 'new-password';
+}
+
+async function handleAuthSubmit(e) {
+  e.preventDefault();
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const submitBtn = document.getElementById('auth-submit');
+  setAuthMessage(null);
+  submitBtn.disabled = true;
+
+  try {
+    if (authMode === 'login') {
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) { setAuthMessage(error.message, 'error'); return; }
+      closeAuthModal();
+    } else {
+      const { error } = await sb.auth.signUp({ email, password });
+      if (error) { setAuthMessage(error.message, 'error'); return; }
+      setAuthMessage('Check your email for a confirmation link.', 'info');
+    }
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+function wireAuthModal() {
+  document.querySelector('.auth-modal-backdrop').addEventListener('click', closeAuthModal);
+  document.getElementById('auth-modal-close').addEventListener('click', closeAuthModal);
+  document.getElementById('auth-toggle-btn').addEventListener('click', () => {
+    authMode = authMode === 'login' ? 'signup' : 'login';
+    updateAuthModalUI();
+    setAuthMessage(null);
+  });
+  document.getElementById('auth-form').addEventListener('submit', handleAuthSubmit);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('auth-modal').hidden) closeAuthModal();
+  });
+}
+
+// Subscribe to auth state changes — fires INITIAL_SESSION on load + on every sign-in/out
+sb.auth.onAuthStateChange((_event, session) => {
+  renderAuthArea(session?.user ?? null);
+});
+
+async function init() {
   applyTeamTheme(currentTeam);
   applyTeamIdentity(currentTeam);
   setSubtitle();
   renderTeamPicker();
   wireTeamPicker();
+  wireAuthModal();
 
   // Standings runs first — sets teamGamesPlayed which the season stat thresholds rely on
   await loadStandings().catch(showError('standings'));
