@@ -519,6 +519,59 @@
     margin: 14px 0;
     border-top: 1px solid #e0e0e0;
   }
+  .info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #c0c0c0;
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    font-style: italic;
+    font-family: Georgia, "Times New Roman", serif;
+    margin-left: 5px;
+    cursor: help;
+    position: relative;
+    vertical-align: middle;
+    user-select: none;
+    transition: background 0.15s ease;
+  }
+  .info-icon:hover, .info-icon.show-tip { background: var(--team-primary); }
+  .info-icon::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #2a2a2a;
+    color: white;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-style: normal;
+    font-weight: 400;
+    font-family: inherit;
+    white-space: normal;
+    width: 220px;
+    z-index: 30;
+    text-align: left;
+    line-height: 1.45;
+    letter-spacing: 0.1px;
+    text-transform: none;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease;
+  }
+  .info-icon:hover::after,
+  .info-icon.show-tip::after {
+    opacity: 1;
+    visibility: visible;
+  }
   .stat-card {
     background: #fafafa;
     border: 1px solid #ececec;
@@ -1414,12 +1467,19 @@ async function loadSchedule() {
 // A compromise between the strict qualifying rule and a half-qualifying display:
 // stricter than half, looser than full. Keeps small-sample names off the cards
 // while still producing more than 1-2 qualified candidates per team.
+const STAT_INFO = {
+  wRcPlus: 'Weighted Runs Created Plus. 100 = league-average offense; 130 means 30% better than average. Park- and league-adjusted, so it compares fairly across teams and eras. The single best offensive metric.',
+  warHit:  'Wins Above Replacement. Combines hitting, fielding, and baserunning into total wins added vs a replacement-level player. ~2 = solid starter, 5 = All-Star, 8+ = MVP-tier season.',
+  fip:     'Fielding Independent Pitching. Same scale as ERA but strips out defense and luck — only counts what the pitcher controls (strikeouts, walks, HBPs, home runs).',
+  warPit:  'Wins Above Replacement (pitching). Comprehensive value metric — wins added vs a replacement-level pitcher. ~2 = quality starter, 4-5 = ace, 7+ = Cy Young contender.',
+};
+
 function seasonHittingCategories() {
   const minPA = Math.max(Math.round(teamGamesPlayed * 2.3), 25);
   return {
     advanced: [
-      { key: 'wRcPlus', label: 'wRC+', format: 'int',    min: { plateAppearances: minPA } },
-      { key: 'war',     label: 'WAR',  format: 'fixed1' },
+      { key: 'wRcPlus', label: 'wRC+', format: 'int',    info: STAT_INFO.wRcPlus, min: { plateAppearances: minPA } },
+      { key: 'war',     label: 'WAR',  format: 'fixed1', info: STAT_INFO.warHit },
     ],
     basic: [
       { key: 'avg',      label: 'AVG', format: 'pct',    min: { plateAppearances: minPA } },
@@ -1434,8 +1494,8 @@ function seasonPitchingCategories() {
   const minIP = Math.max(Math.round(teamGamesPlayed * 0.75), 10);
   return {
     advanced: [
-      { key: 'fip', label: 'FIP', format: 'fixed2', asc: true, min: { inningsPitched: minIP } },
-      { key: 'war', label: 'WAR', format: 'fixed1' },
+      { key: 'fip', label: 'FIP', format: 'fixed2', asc: true, info: STAT_INFO.fip, min: { inningsPitched: minIP } },
+      { key: 'war', label: 'WAR', format: 'fixed1', info: STAT_INFO.warPit },
     ],
     basic: [
       { key: 'era',        label: 'ERA',  format: 'fixed2', asc: true, min: { inningsPitched: minIP } },
@@ -1511,11 +1571,18 @@ function playerPhotoUrl(playerId) {
   return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_120,q_auto:best/v1/people/${playerId}/headshot/67/current`;
 }
 
+function infoIconHtml(info) {
+  if (!info) return '';
+  const safe = info.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  return `<span class="info-icon" data-tip="${safe}" aria-label="What is this stat?">i</span>`;
+}
+
 function renderStatCard(cat, leader) {
+  const nameHtml = `${cat.label}${infoIconHtml(cat.info)}`;
   if (!leader) {
     return `<div class="stat-card empty">
       <div class="stat-card-body">
-        <div class="stat-name">${cat.label}</div>
+        <div class="stat-name">${nameHtml}</div>
         <div class="stat-value">–</div>
         <div class="stat-player">No qualified player</div>
       </div>
@@ -1526,11 +1593,25 @@ function renderStatCard(cat, leader) {
   return `<div class="stat-card">
     <img class="player-photo" src="${photo}" alt="${leader.player.fullName}" onerror="this.style.visibility='hidden'">
     <div class="stat-card-body">
-      <div class="stat-name">${cat.label}</div>
+      <div class="stat-name">${nameHtml}</div>
       <div class="stat-value">${value}</div>
       <div class="stat-player">${leader.player.fullName}</div>
     </div>
   </div>`;
+}
+
+// Mobile: tap to toggle the tooltip; tap outside to close.
+function wireInfoIcons() {
+  document.addEventListener('click', (e) => {
+    const icon = e.target.closest('.info-icon');
+    document.querySelectorAll('.info-icon.show-tip').forEach(el => {
+      if (el !== icon) el.classList.remove('show-tip');
+    });
+    if (icon) {
+      icon.classList.toggle('show-tip');
+      e.stopPropagation();
+    }
+  });
 }
 
 function renderStatGrid(splits, categories) {
@@ -2173,6 +2254,7 @@ async function init() {
   wireTeamPicker();
   wireAuthModal();
   wireTeamManager();
+  wireInfoIcons();
 
   // Resolve auth + saved teams before deciding which view to render.
   // Both wrapped: a hung Supabase shouldn't leave the whole page in "Loading…".
