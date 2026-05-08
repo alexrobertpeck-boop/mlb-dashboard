@@ -883,9 +883,9 @@
   }
 
   /* ─── Season heatmap ─── */
-  /* Cells use aspect-ratio so they're always square, regardless of how wide
-     each column gets. Columns are `1fr` so the grid fills the section width;
-     as more weeks of season are added, each cell automatically shrinks. */
+  /* Layout: months-as-rows × 31-days-as-columns. The grid is always 32 columns
+     wide (1 month label + 31 days), filling the section. Each month adds one
+     row, so the heatmap grows downward as the season progresses. */
   .heatmap-wrap {
     display: flex;
     flex-direction: column;
@@ -893,19 +893,17 @@
   }
   .heatmap-grid {
     display: grid;
+    grid-template-columns: 56px repeat(31, 1fr);
     gap: 4px;
     width: 100%;
   }
-  .heatmap-month {
-    grid-row: 1;
-    font-size: 0.78em;
-    color: #888;
+  .heatmap-month-label {
+    display: flex;
+    align-items: center;
+    font-size: 0.85em;
     font-weight: 600;
-    letter-spacing: 0.4px;
-    text-transform: uppercase;
-    align-self: end;
-    padding-bottom: 2px;
-    overflow: hidden;
+    color: #555;
+    white-space: nowrap;
   }
   .heatmap-cell {
     aspect-ratio: 1;
@@ -913,6 +911,11 @@
     background: #ebedf0;
     cursor: default;
     min-width: 0;
+  }
+  .heatmap-cell.empty { background: transparent; }
+  @media (max-width: 600px) {
+    .heatmap-grid { grid-template-columns: 36px repeat(31, 1fr); gap: 2px; }
+    .heatmap-month-label { font-size: 0.72em; }
   }
   .heatmap-cell.win { background: #a3d4ae; }
   .heatmap-cell.loss { background: #e8a8a8; }
@@ -1692,11 +1695,8 @@ function dayTooltip(dateKey, games) {
 }
 
 function renderHeatmap(games) {
-  const season = new Date().getFullYear();
-  const start = new Date(`${season}-03-15T12:00:00`);
   const today = new Date();
-  // End at the last day of the current month — no point showing empty future months
-  const end = new Date(today.getFullYear(), today.getMonth() + 1, 0, 12, 0, 0);
+  const season = today.getFullYear();
   const todayKey = isoDate(0);
 
   // Group games by date key
@@ -1707,48 +1707,38 @@ function renderHeatmap(games) {
     gamesByDate[key].push(g);
   }
 
-  const cells = [];
-  const monthFirstCol = new Map();
-  const startDow = start.getDay();
-  let totalDayCount = 0;
+  // Build a row per month from March (when MLB starts) through current month
+  const startMonth = 2; // 0-indexed: March
+  const endMonth = today.getMonth();
+  const items = []; // alternating month-label + 31 cells per row
 
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dayIndex = Math.floor((d - start) / 86400000);
-    const totalDays = startDow + dayIndex;
-    const col = Math.floor(totalDays / 7) + 1;
-    const row = (totalDays % 7) + 2;
+  for (let m = startMonth; m <= endMonth; m++) {
+    const monthName = new Date(season, m, 1).toLocaleDateString(undefined, { month: 'short' });
+    const daysInMonth = new Date(season, m + 1, 0).getDate();
+    const firstValidDay = (m === startMonth) ? 15 : 1; // season starts mid-March
 
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const dayGames = gamesByDate[key] || [];
-    const cls = dayClass(dayGames);
-    const tooltip = dayTooltip(key, dayGames);
-    const classes = ['heatmap-cell'];
-    if (cls) classes.push(cls);
-    if (key === todayKey) classes.push('today');
+    items.push(`<div class="heatmap-month-label">${monthName}</div>`);
 
-    cells.push(`<div class="${classes.join(' ')}" style="grid-column-start: ${col}; grid-row-start: ${row};" title="${tooltip}"></div>`);
+    for (let day = 1; day <= 31; day++) {
+      // Empty placeholder for days outside this month or before season start
+      if (day > daysInMonth || day < firstValidDay) {
+        items.push('<div class="heatmap-cell empty"></div>');
+        continue;
+      }
 
-    const monthKey = `${d.getFullYear()}-${d.getMonth()}`;
-    if (!monthFirstCol.has(monthKey)) {
-      monthFirstCol.set(monthKey, {
-        col,
-        name: d.toLocaleDateString(undefined, { month: 'short' }),
-      });
+      const key = `${season}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const dayGames = gamesByDate[key] || [];
+      const cls = dayClass(dayGames);
+      const tooltip = dayTooltip(key, dayGames);
+      const classes = ['heatmap-cell'];
+      if (cls) classes.push(cls);
+      if (key === todayKey) classes.push('today');
+
+      items.push(`<div class="${classes.join(' ')}" title="${tooltip}"></div>`);
     }
-    totalDayCount++;
   }
 
-  const numColumns = Math.ceil((startDow + totalDayCount) / 7);
-
-  // Each month label spans from its first column to the next month's first column,
-  // so the text has horizontal room and labels don't overlap.
-  const monthArr = [...monthFirstCol.values()];
-  const monthLabels = monthArr.map((m, i) => {
-    const nextCol = monthArr[i + 1]?.col ?? (numColumns + 1);
-    const span = Math.max(1, nextCol - m.col);
-    return `<div class="heatmap-month" style="grid-column: ${m.col} / span ${span};">${m.name}</div>`;
-  });
-
+  // Per-game W-L summary (handles doubleheaders correctly)
   const finished = games.filter(g => {
     const k = classifyGame(g).kind;
     return k === 'win' || k === 'loss';
@@ -1761,9 +1751,7 @@ function renderHeatmap(games) {
   el.innerHTML = `
     <div class="heatmap-wrap">
       <div class="heatmap-summary"><strong>${wins}–${losses}</strong> through ${finished.length} games</div>
-      <div class="heatmap-grid" style="grid-template-columns: repeat(${numColumns}, 1fr);">
-        ${monthLabels.join('')}${cells.join('')}
-      </div>
+      <div class="heatmap-grid">${items.join('')}</div>
       <div class="heatmap-legend">
         <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#a3d4ae"></span>Win</span>
         <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#e8a8a8"></span>Loss</span>
