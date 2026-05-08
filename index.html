@@ -727,6 +727,78 @@
     background: #e5e5e5;
   }
 
+  /* ─── My Teams button + manager ─── */
+  .my-teams-btn {
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 0.68em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: white;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .my-teams-btn:hover {
+    background: rgba(255,255,255,0.3);
+    border-color: rgba(255,255,255,0.6);
+  }
+  .my-teams-count {
+    margin-left: 4px;
+    opacity: 0.85;
+  }
+
+  .teams-modal-content { max-width: 540px; }
+  .teams-modal-sub {
+    color: #666;
+    font-size: 0.88em;
+    margin: -8px 0 16px;
+  }
+  .teams-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    max-height: 420px;
+    overflow-y: auto;
+    padding: 4px;
+    border: 1px solid #eee;
+    border-radius: 8px;
+  }
+  .team-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .team-row:hover { background: #f5f5f7; }
+  .team-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--team-primary);
+    margin: 0;
+    flex-shrink: 0;
+  }
+  .team-row img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  .team-row span {
+    font-size: 0.9em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  @media (max-width: 600px) {
+    .teams-grid { grid-template-columns: 1fr; }
+  }
+
   /* ─── Mobile tweaks ─── */
   @media (max-width: 600px) {
     body { padding: 12px; }
@@ -859,6 +931,18 @@
       <span id="auth-toggle-text">Don't have an account?</span>
       <button type="button" id="auth-toggle-btn">Sign up</button>
     </div>
+  </div>
+</div>
+
+<div class="auth-modal" id="teams-modal" hidden>
+  <div class="auth-modal-backdrop"></div>
+  <div class="auth-modal-content teams-modal-content">
+    <button class="auth-modal-close" id="teams-modal-close" aria-label="Close">×</button>
+    <h2>My Teams</h2>
+    <p class="teams-modal-sub">Pick the teams you want to follow. Saved across devices.</p>
+    <div class="teams-grid" id="teams-grid"></div>
+    <div class="auth-message" id="teams-message" hidden></div>
+    <button type="button" class="auth-submit" id="teams-save-btn">Save</button>
   </div>
 </div>
 
@@ -1509,11 +1593,14 @@ function showError(id) {
 
 let authMode = 'login'; // 'login' | 'signup'
 
+let savedTeamIds = new Set();
+
 function renderAuthArea(user) {
   const el = document.getElementById('auth-area');
   if (user) {
     el.innerHTML = `
       <div class="auth-user-info">
+        <button class="my-teams-btn" id="my-teams-btn">My Teams<span class="my-teams-count" id="my-teams-count"></span></button>
         <span class="auth-email">${user.email}</span>
         <button class="auth-logout-btn" id="auth-logout-btn">Log out</button>
       </div>
@@ -1521,7 +1608,10 @@ function renderAuthArea(user) {
     document.getElementById('auth-logout-btn').addEventListener('click', async () => {
       await sb.auth.signOut();
     });
+    document.getElementById('my-teams-btn').addEventListener('click', openTeamManager);
+    loadSavedTeams();
   } else {
+    savedTeamIds = new Set();
     el.innerHTML = `<button class="auth-btn" id="auth-login-btn">Log in</button>`;
     document.getElementById('auth-login-btn').addEventListener('click', () => openAuthModal('login'));
   }
@@ -1591,7 +1681,7 @@ async function handleGoogleSignIn() {
 }
 
 function wireAuthModal() {
-  document.querySelector('.auth-modal-backdrop').addEventListener('click', closeAuthModal);
+  document.querySelector('#auth-modal .auth-modal-backdrop').addEventListener('click', closeAuthModal);
   document.getElementById('auth-modal-close').addEventListener('click', closeAuthModal);
   document.getElementById('auth-toggle-btn').addEventListener('click', () => {
     authMode = authMode === 'login' ? 'signup' : 'login';
@@ -1610,6 +1700,98 @@ sb.auth.onAuthStateChange((_event, session) => {
   renderAuthArea(session?.user ?? null);
 });
 
+/* ─── Team manager (saved teams in Supabase) ─── */
+
+async function loadSavedTeams() {
+  const { data, error } = await sb.from('user_teams')
+    .select('team_id')
+    .order('display_order', { ascending: true });
+  if (error) { console.error('Error loading saved teams:', error); return; }
+  savedTeamIds = new Set(data.map(r => r.team_id));
+  updateTeamCountBadge();
+}
+
+function updateTeamCountBadge() {
+  const el = document.getElementById('my-teams-count');
+  if (!el) return;
+  el.textContent = savedTeamIds.size > 0 ? ` (${savedTeamIds.size})` : '';
+}
+
+function openTeamManager() {
+  renderTeamCheckboxes();
+  setTeamMessage(null);
+  document.getElementById('teams-modal').hidden = false;
+}
+
+function closeTeamManager() {
+  document.getElementById('teams-modal').hidden = true;
+}
+
+function setTeamMessage(text, type = 'error') {
+  const el = document.getElementById('teams-message');
+  if (!text) { el.hidden = true; return; }
+  el.textContent = text;
+  el.className = `auth-message ${type}`;
+  el.hidden = false;
+}
+
+function renderTeamCheckboxes() {
+  const grid = document.getElementById('teams-grid');
+  const sorted = Object.entries(TEAMS).sort((a, b) => a[1].name.localeCompare(b[1].name));
+  grid.innerHTML = sorted.map(([id, t]) => {
+    const checked = savedTeamIds.has(parseInt(id, 10)) ? 'checked' : '';
+    return `<label class="team-row">
+      <input type="checkbox" data-team-id="${id}" ${checked}>
+      <img src="https://www.mlbstatic.com/team-logos/${id}.svg" alt="" onerror="this.style.visibility='hidden'">
+      <span>${t.name}</span>
+    </label>`;
+  }).join('');
+}
+
+async function handleSaveTeams() {
+  const checkboxes = document.querySelectorAll('#teams-grid input[type="checkbox"]');
+  const selectedIds = [...checkboxes]
+    .filter(cb => cb.checked)
+    .map(cb => parseInt(cb.dataset.teamId, 10));
+
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) { setTeamMessage('Not logged in.', 'error'); return; }
+
+  const saveBtn = document.getElementById('teams-save-btn');
+  saveBtn.disabled = true;
+  setTeamMessage('Saving…', 'info');
+
+  try {
+    // Replace strategy: delete current rows, insert selected ones
+    const { error: deleteError } = await sb.from('user_teams').delete().eq('user_id', user.id);
+    if (deleteError) throw deleteError;
+
+    if (selectedIds.length) {
+      const rows = selectedIds.map((id, i) => ({ user_id: user.id, team_id: id, display_order: i }));
+      const { error: insertError } = await sb.from('user_teams').insert(rows);
+      if (insertError) throw insertError;
+    }
+
+    savedTeamIds = new Set(selectedIds);
+    updateTeamCountBadge();
+    setTeamMessage(`Saved ${selectedIds.length} team${selectedIds.length === 1 ? '' : 's'}.`, 'info');
+    setTimeout(closeTeamManager, 900);
+  } catch (e) {
+    setTeamMessage(`Couldn't save: ${e.message}`, 'error');
+  } finally {
+    saveBtn.disabled = false;
+  }
+}
+
+function wireTeamManager() {
+  document.querySelector('#teams-modal .auth-modal-backdrop').addEventListener('click', closeTeamManager);
+  document.getElementById('teams-modal-close').addEventListener('click', closeTeamManager);
+  document.getElementById('teams-save-btn').addEventListener('click', handleSaveTeams);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('teams-modal').hidden) closeTeamManager();
+  });
+}
+
 async function init() {
   applyTeamTheme(currentTeam);
   applyTeamIdentity(currentTeam);
@@ -1617,6 +1799,7 @@ async function init() {
   renderTeamPicker();
   wireTeamPicker();
   wireAuthModal();
+  wireTeamManager();
 
   // Standings runs first — sets teamGamesPlayed which the season stat thresholds rely on
   await loadStandings().catch(showError('standings'));
