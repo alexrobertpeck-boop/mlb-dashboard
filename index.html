@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MLB Dashboard</title>
 <style>
   :root {
@@ -532,6 +533,38 @@
 
   .loading { color: #888; font-style: italic; }
   .error { color: #b3261e; padding: 12px; background: #fef2f2; border-radius: 6px; }
+
+  /* ─── Mobile tweaks ─── */
+  @media (max-width: 600px) {
+    body { padding: 12px; }
+    main { border-radius: 12px; }
+    header { padding: 18px 16px; gap: 14px; border-radius: 12px 12px 0 0; }
+    header::after { border-radius: 12px 12px 0 0; }
+    .header-logo { width: 56px; height: 56px; }
+    header h1 { font-size: 1.4em; }
+    .header-sub { font-size: 0.78em; }
+    .header-chevron {
+      padding: 7px 11px;
+      font-size: 0.65em;
+      margin-left: 10px;
+    }
+    .header-record { min-width: 0; text-align: left; }
+    .record-line { font-size: 1.3em; }
+    .record-sub { font-size: 0.65em; }
+    section { padding: 16px; }
+    h2 { font-size: 1.05em; padding-left: 10px; }
+    .news-thumb { width: 72px; height: 72px; }
+    .news-headline { font-size: 0.92em; }
+    .stat-cards { grid-template-columns: 1fr; }
+    .odds-grid { grid-template-columns: 1fr 1fr; }
+    .projection-value { font-size: 2.4em; }
+    .team-picker-panel {
+      left: 12px;
+      right: 12px;
+      width: auto;
+    }
+    .team-picker-grid { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
