@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MLB Dashboard</title>
+<style>
+  :root {
+    --team-primary: #33006F;
+    --team-primary-dark: #1f0044;
+    --team-primary-darker: #0f0024;
+    --team-accent: #C4CED4;
+    --team-primary-rgb: 51, 0, 111;
+    --team-accent-rgb: 196, 206, 212;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: #f5f5f7;
+    margin: 0;
+    padding: 24px;
+    color: #1a1a1a;
+  }
+  main {
+    max-width: 1180px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    overflow: visible;
+  }
+
+  /* ─── Modern header ─── */
+  header {
+    background: linear-gradient(135deg, var(--team-primary) 0%, var(--team-primary-dark) 65%, var(--team-primary-darker) 100%);
+    color: white;
+    padding: 28px 32px;
+    border-bottom: 3px solid var(--team-accent);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 24px;
+    position: relative;
+    border-radius: 14px 14px 0 0;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 95% -30%, rgba(var(--team-accent-rgb), 0.22), transparent 55%);
+    pointer-events: none;
+    border-radius: 14px 14px 0 0;
+  }
+  .header-brand {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    position: relative;
+    z-index: 1;
+    cursor: pointer;
+    padding: 6px 12px 6px 6px;
+    margin: -6px -6px -6px -6px;
+    border-radius: 10px;
+    transition: background 0.15s ease;
+    user-select: none;
+  }
+  .header-brand:hover { background: rgba(255,255,255,0.08); }
+  .header-logo {
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+    flex-shrink: 0;
+    filter:
+      drop-shadow( 1.5px  0    0 #fff)
+      drop-shadow(-1.5px  0    0 #fff)
+      drop-shadow( 0      1.5px 0 #fff)
+      drop-shadow( 0     -1.5px 0 #fff)
+      drop-shadow( 1px    1px   0 #fff)
+      drop-shadow(-1px   -1px   0 #fff)
+      drop-shadow( 1px   -1px   0 #fff)
+      drop-shadow(-1px    1px   0 #fff)
+      drop-shadow( 0      3px   6px rgba(0,0,0,0.35));
+  }
+  header h1 {
+    margin: 0;
+    font-size: 1.85em;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+    line-height: 1;
+  }
+  .header-sub {
+    margin: 8px 0 0;
+    opacity: 0.7;
+    font-size: 0.82em;
+    font-weight: 400;
+    letter-spacing: 0.2px;
+  }
+  .header-chevron {
+    margin-left: 4px;
+    opacity: 0.6;
+    font-size: 0.9em;
+    align-self: center;
+  }
+  .header-record {
+    text-align: right;
+    position: relative;
+    z-index: 1;
+    min-width: 140px;
+  }
+  .record-line {
+    font-size: 1.7em;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    line-height: 1;
+  }
+  .record-sub {
+    font-size: 0.72em;
+    opacity: 0.75;
+    margin-top: 6px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+  }
+
+  /* ─── Team picker dropdown ─── */
+  .team-picker-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 32px;
+    background: white;
+    color: #222;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    z-index: 50;
+    width: 540px;
+    max-width: calc(100vw - 64px);
+    max-height: 480px;
+    overflow-y: auto;
+    padding: 12px;
+  }
+  .team-picker-panel[hidden] { display: none; }
+  .team-picker-title {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #888;
+    font-weight: 700;
+    padding: 4px 8px 8px;
+  }
+  .team-picker-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+  }
+  .team-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    width: 100%;
+  }
+  .team-option:hover { background: #f5f5f7; }
+  .team-option.current {
+    background: rgba(var(--team-primary-rgb), 0.1);
+    color: var(--team-primary);
+    font-weight: 600;
+  }
+  .team-option img { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
+  .team-option span { font-size: 0.9em; }
+
+  section {
+    padding: 24px;
+    border-bottom: 1px solid #eee;
+  }
+  section:last-child { border-bottom: none; border-radius: 0 0 14px 14px; }
+  h2 {
+    color: var(--team-primary);
+    border-left: 4px solid var(--team-primary);
+    padding-left: 12px;
+    margin: 0 0 16px;
+    font-size: 1.2em;
+  }
+
+  /* ─── Calendar ─── */
+  .calendar-wrap { overflow-x: auto; padding-bottom: 8px; }
+  .calendar {
+    display: grid;
+    grid-template-columns: repeat(11, minmax(78px, 1fr));
+    gap: 6px;
+  }
+  .day {
+    background: #fafafa;
+    border: 1px solid #ececec;
+    border-radius: 8px;
+    padding: 8px 6px;
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    font-size: 0.85em;
+    transition: transform 0.1s ease;
+  }
+  .day:hover { transform: translateY(-1px); }
+  .day.today {
+    border: 2px solid var(--team-primary);
+    box-shadow: 0 2px 8px rgba(var(--team-primary-rgb), 0.15);
+  }
+  .day.empty { background: #f5f5f5; }
+  .day.empty:not(.today) { opacity: 0.55; }
+  .day.win { background: #eaf6ec; }
+  .day.loss { background: #fbe8e8; }
+  .day.other-game { background: #ececec; }
+  .day-label { color: #777; font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.5px; }
+  .day-num { font-weight: 700; font-size: 1.05em; margin-bottom: 4px; color: #222; }
+  .day.today .day-label, .day.today .day-num { color: var(--team-primary); }
+  .game-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; }
+  .game-cell + .game-cell { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #ddd; }
+  .logo {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    margin: 2px 0;
+  }
+  .matchup { font-size: 0.85em; color: #444; font-weight: 600; }
+  .matchup .prefix { color: #888; font-weight: 400; margin-right: 2px; }
+  .status { font-size: 0.78em; color: #555; margin-top: 2px; }
+  .result { font-weight: 700; font-size: 0.85em; margin-top: 2px; min-height: 1.1em; }
+  .result.win { color: #1a7a3a; }
+  .result.loss { color: #b3261e; }
+  .badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.7em;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .badge.ppd, .badge.cxl, .badge.susp { background: #888; color: white; }
+  .badge.live { background: #b3261e; color: white; animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: 0.6; } }
+  .empty-note { color: #aaa; font-size: 0.78em; margin-top: 24px; }
+  .pitcher {
+    font-size: 0.68em;
+    color: #555;
+    background: rgba(var(--team-primary-rgb), 0.06);
+    border: 1px solid rgba(var(--team-primary-rgb), 0.12);
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-top: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    font-weight: 600;
+  }
+  .pitcher .pitcher-label { color: #888; font-weight: 400; margin-right: 3px; }
+
+  /* ─── News feed ─── */
+  .news-list { display: flex; flex-direction: column; gap: 10px; }
+  .news-item {
+    display: flex;
+    gap: 14px;
+    padding: 12px;
+    border-radius: 8px;
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid #ececec;
+    background: #fafafa;
+    transition: border-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  }
+  .news-item:hover {
+    border-color: var(--team-primary);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(var(--team-primary-rgb), 0.08);
+  }
+  .news-thumb {
+    width: 96px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: 6px;
+    flex-shrink: 0;
+    background: #eee;
+  }
+  .news-body { flex: 1; min-width: 0; }
+  .news-headline {
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 4px;
+    line-height: 1.3;
+    font-size: 0.98em;
+  }
+  .news-summary {
+    font-size: 0.85em;
+    color: #555;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .news-meta {
+    font-size: 0.7em;
+    color: #888;
+    margin-top: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+  .news-source {
+    display: inline-block;
+    font-weight: 700;
+    background: rgba(var(--team-primary-rgb), 0.08);
+    color: var(--team-primary);
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-right: 6px;
+    letter-spacing: 0.4px;
+  }
+
+  /* ─── Playoff odds ─── */
+  .projection-hero {
+    background: linear-gradient(135deg, var(--team-primary) 0%, var(--team-primary-dark) 100%);
+    color: white;
+    border-radius: 12px;
+    padding: 26px 20px;
+    margin-bottom: 16px;
+    text-align: center;
+    border: 2px solid var(--team-accent);
+    box-shadow: 0 2px 14px rgba(var(--team-primary-rgb), 0.18);
+    position: relative;
+    overflow: hidden;
+  }
+  .projection-hero::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 90% -20%, rgba(var(--team-accent-rgb), 0.18), transparent 55%);
+    pointer-events: none;
+  }
+  .projection-label {
+    font-size: 0.72em;
+    text-transform: uppercase;
+    letter-spacing: 1.6px;
+    opacity: 0.85;
+    font-weight: 700;
+    position: relative;
+    z-index: 1;
+  }
+  .projection-value {
+    font-size: 3em;
+    font-weight: 800;
+    letter-spacing: -1.5px;
+    line-height: 1;
+    margin: 10px 0 6px;
+    position: relative;
+    z-index: 1;
+  }
+  .projection-sub {
+    font-size: 0.78em;
+    opacity: 0.78;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 600;
+    position: relative;
+    z-index: 1;
+  }
+  .odds-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 700px) {
+    .odds-grid { grid-template-columns: 1fr 1fr; }
+  }
+  .odds-card {
+    background: #fafafa;
+    border: 1px solid #ececec;
+    border-radius: 10px;
+    padding: 18px 12px;
+    text-align: center;
+  }
+  .odds-value {
+    font-size: 2em;
+    font-weight: 800;
+    color: var(--team-primary);
+    line-height: 1;
+    letter-spacing: -0.5px;
+  }
+  .odds-label {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    color: #666;
+    margin-top: 8px;
+    letter-spacing: 0.6px;
+    font-weight: 700;
+  }
+  .odds-projection {
+    margin-top: 14px;
+    font-size: 0.85em;
+    color: #666;
+    text-align: center;
+  }
+  .odds-projection strong { color: var(--team-primary); }
+
+  /* ─── Standings tables ─── */
+  .standings-grid, .stat-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+  }
+  @media (max-width: 900px) {
+    .standings-grid, .stat-pair { grid-template-columns: 1fr; }
+  }
+  .standings-block h3, .stat-box h3 {
+    color: var(--team-primary);
+    margin: 0 0 10px;
+    font-size: 0.82em;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 700;
+  }
+  .standings-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+  }
+  .standings-table th {
+    text-align: left;
+    font-weight: 600;
+    color: #777;
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    border-bottom: 2px solid #eaeaea;
+    padding: 8px 6px;
+  }
+  .standings-table td {
+    padding: 8px 6px;
+    border-bottom: 1px solid #f2f2f2;
+    vertical-align: middle;
+  }
+  .standings-table tr.team-row { background: rgba(var(--team-primary-rgb), 0.05); }
+  .standings-table tr.team-row td { color: var(--team-primary); font-weight: 600; }
+  .standings-table .pos { font-weight: 700; color: #555; width: 24px; }
+  .team-cell { display: flex; align-items: center; gap: 8px; }
+  .team-cell img.team-logo { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
+  .last10-w { color: #1a7a3a; font-weight: 700; }
+  .last10-l { color: #b3261e; font-weight: 700; }
+
+  /* ─── Stat cards ─── */
+  .stat-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .stat-card {
+    background: #fafafa;
+    border: 1px solid #ececec;
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    transition: border-color 0.15s ease, transform 0.1s ease;
+  }
+  .stat-card:hover {
+    border-color: var(--team-accent);
+    transform: translateY(-1px);
+  }
+  .player-photo {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #fff;
+    border: 2px solid var(--team-accent);
+    flex-shrink: 0;
+  }
+  .stat-card-body { flex: 1; min-width: 0; }
+  .stat-name {
+    font-size: 0.68em;
+    color: #777;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 700;
+  }
+  .stat-value {
+    font-size: 1.45em;
+    font-weight: 800;
+    color: var(--team-primary);
+    line-height: 1.1;
+    letter-spacing: -0.3px;
+  }
+  .stat-player {
+    font-size: 0.78em;
+    color: #444;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+  }
+  .stat-card.empty .stat-value { color: #aaa; }
+  .stat-card.empty .stat-player { color: #999; font-style: italic; }
+
+  .loading { color: #888; font-style: italic; }
+  .error { color: #b3261e; padding: 12px; background: #fef2f2; border-radius: 6px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="header-brand" id="team-picker-trigger" role="button" tabindex="0">
+      <img class="header-logo" id="header-logo" src="" alt="">
+      <div>
+        <h1 id="header-team-name">Loading…</h1>
+        <p class="header-sub" id="today"></p>
+      </div>
+      <span class="header-chevron">▾</span>
+    </div>
+    <div class="header-record" id="header-record"></div>
+    <div class="team-picker-panel" id="team-picker-panel" hidden>
+      <div class="team-picker-title">Choose a team</div>
+      <div class="team-picker-grid" id="team-picker-grid"></div>
+    </div>
+  </header>
+
+  <section>
+    <h2>Schedule</h2>
+    <div class="calendar-wrap">
+      <div id="calendar" class="loading">Loading…</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Season Stats</h2>
+    <div class="stat-pair">
+      <div class="stat-box">
+        <h3>Batting Leaders</h3>
+        <div id="season-hitting" class="stat-cards loading">Loading…</div>
+      </div>
+      <div class="stat-box">
+        <h3>Pitching Leaders</h3>
+        <div id="season-pitching" class="stat-cards loading">Loading…</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Who's Hot — Last 10 Days</h2>
+    <div class="stat-pair">
+      <div class="stat-box">
+        <h3>Batting</h3>
+        <div id="hot-hitting" class="stat-cards loading">Loading…</div>
+      </div>
+      <div class="stat-box">
+        <h3>Pitching</h3>
+        <div id="hot-pitching" class="stat-cards loading">Loading…</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Latest News</h2>
+    <div id="news" class="loading">Loading…</div>
+  </section>
+
+  <section>
+    <h2>Standings</h2>
+    <div id="standings" class="loading">Loading…</div>
+  </section>
+
+  <section>
+    <h2>Playoff Outlook</h2>
+    <div id="playoff-odds" class="loading">Loading…</div>
+  </section>
+</main>
+
+<script>
+const API_BASE = 'https://statsapi.mlb.com/api/v1';
+
+/* ─── Team config: id → metadata ─── */
+const TEAMS = {
+  108: { abbr: 'LAA', name: 'Los Angeles Angels',     short: 'Angels',     espnId: 3,  primary: '#BA0021', accent: '#003263' },
+  109: { abbr: 'ARI', name: 'Arizona Diamondbacks',   short: 'D-backs',    espnId: 29, primary: '#A71930', accent: '#E3D4AD' },
+  110: { abbr: 'BAL', name: 'Baltimore Orioles',      short: 'Orioles',    espnId: 1,  primary: '#DF4601', accent: '#000000' },
+  111: { abbr: 'BOS', name: 'Boston Red Sox',         short: 'Red Sox',    espnId: 2,  primary: '#BD3039', accent: '#0C2340' },
+  112: { abbr: 'CHC', name: 'Chicago Cubs',           short: 'Cubs',       espnId: 16, primary: '#0E3386', accent: '#CC3433' },
+  113: { abbr: 'CIN', name: 'Cincinnati Reds',        short: 'Reds',       espnId: 17, primary: '#C6011F', accent: '#000000' },
+  114: { abbr: 'CLE', name: 'Cleveland Guardians',    short: 'Guardians',  espnId: 5,  primary: '#0C2340', accent: '#E31937' },
+  115: { abbr: 'COL', name: 'Colorado Rockies',       short: 'Rockies',    espnId: 27, primary: '#33006F', accent: '#C4CED4' },
+  116: { abbr: 'DET', name: 'Detroit Tigers',         short: 'Tigers',     espnId: 6,  primary: '#0C2340', accent: '#FA4616' },
+  117: { abbr: 'HOU', name: 'Houston Astros',         short: 'Astros',     espnId: 18, primary: '#002D62', accent: '#EB6E1F' },
+  118: { abbr: 'KC',  name: 'Kansas City Royals',     short: 'Royals',     espnId: 7,  primary: '#004687', accent: '#BD9B60' },
+  119: { abbr: 'LAD', name: 'Los Angeles Dodgers',    short: 'Dodgers',    espnId: 19, primary: '#005A9C', accent: '#EF3E42' },
+  120: { abbr: 'WSH', name: 'Washington Nationals',   short: 'Nationals',  espnId: 20, primary: '#AB0003', accent: '#14225A' },
+  121: { abbr: 'NYM', name: 'New York Mets',          short: 'Mets',       espnId: 21, primary: '#002D72', accent: '#FF5910' },
+  133: { abbr: 'ATH', name: 'Athletics',              short: 'Athletics',  espnId: 11, primary: '#003831', accent: '#EFB21E' },
+  134: { abbr: 'PIT', name: 'Pittsburgh Pirates',     short: 'Pirates',    espnId: 23, primary: '#27251F', accent: '#FDB827' },
+  135: { abbr: 'SD',  name: 'San Diego Padres',       short: 'Padres',     espnId: 25, primary: '#2F241D', accent: '#FFC425' },
+  136: { abbr: 'SEA', name: 'Seattle Mariners',       short: 'Mariners',   espnId: 12, primary: '#0C2C56', accent: '#005C5C' },
+  137: { abbr: 'SF',  name: 'San Francisco Giants',   short: 'Giants',     espnId: 26, primary: '#FD5A1E', accent: '#27251F' },
+  138: { abbr: 'STL', name: 'St. Louis Cardinals',    short: 'Cardinals',  espnId: 24, primary: '#C41E3A', accent: '#0C2340' },
+  139: { abbr: 'TB',  name: 'Tampa Bay Rays',         short: 'Rays',       espnId: 30, primary: '#092C5C', accent: '#8FBCE6' },
+  140: { abbr: 'TEX', name: 'Texas Rangers',          short: 'Rangers',    espnId: 13, primary: '#003278', accent: '#C0111F' },
+  141: { abbr: 'TOR', name: 'Toronto Blue Jays',      short: 'Blue Jays',  espnId: 14, primary: '#134A8E', accent: '#1D2D5C' },
+  142: { abbr: 'MIN', name: 'Minnesota Twins',        short: 'Twins',      espnId: 9,  primary: '#002B5C', accent: '#D31145' },
+  143: { abbr: 'PHI', name: 'Philadelphia Phillies',  short: 'Phillies',   espnId: 22, primary: '#E81828', accent: '#002D72' },
+  144: { abbr: 'ATL', name: 'Atlanta Braves',         short: 'Braves',     espnId: 15, primary: '#CE1141', accent: '#13274F' },
+  145: { abbr: 'CWS', name: 'Chicago White Sox',      short: 'White Sox',  espnId: 4,  primary: '#27251F', accent: '#C4CED4' },
+  146: { abbr: 'MIA', name: 'Miami Marlins',          short: 'Marlins',    espnId: 28, primary: '#00A3E0', accent: '#EF3340' },
+  147: { abbr: 'NYY', name: 'New York Yankees',       short: 'Yankees',    espnId: 10, primary: '#003087', accent: '#E4002C' },
+  158: { abbr: 'MIL', name: 'Milwaukee Brewers',      short: 'Brewers',    espnId: 8,  primary: '#0A2351', accent: '#B6922E' },
+};
+
+const DEFAULT_TEAM_ID = 115;
+
+const DIVISIONS = {
+  200: 'AL West', 201: 'AL East', 202: 'AL Central',
+  203: 'NL West', 204: 'NL East', 205: 'NL Central',
+};
+
+/* ─── Resolve current team from URL → localStorage → default ─── */
+function getInitialTeamId() {
+  const fromUrl = parseInt(new URL(window.location.href).searchParams.get('team'), 10);
+  if (TEAMS[fromUrl]) return fromUrl;
+  const fromStorage = parseInt(localStorage.getItem('dashboardTeam'), 10);
+  if (TEAMS[fromStorage]) return fromStorage;
+  return DEFAULT_TEAM_ID;
+}
+
+let currentTeamId = getInitialTeamId();
+let currentTeam = TEAMS[currentTeamId];
+let teamGamesPlayed = 30; // safe default; updated by loadStandings before stat tasks run
+
+/* ─── Color helpers for theming ─── */
+function hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  return [
+    parseInt(h.substr(0, 2), 16),
+    parseInt(h.substr(2, 2), 16),
+    parseInt(h.substr(4, 2), 16),
+  ];
+}
+function shadeHex(hex, percent) {
+  const [r, g, b] = hexToRgb(hex);
+  const factor = (100 + percent) / 100;
+  const apply = c => Math.max(0, Math.min(255, Math.round(c * factor)));
+  return '#' + [apply(r), apply(g), apply(b)].map(c => c.toString(16).padStart(2, '0')).join('');
+}
+
+function applyTeamTheme(team) {
+  const root = document.documentElement.style;
+  root.setProperty('--team-primary', team.primary);
+  root.setProperty('--team-primary-dark', shadeHex(team.primary, -25));
+  root.setProperty('--team-primary-darker', shadeHex(team.primary, -50));
+  root.setProperty('--team-accent', team.accent);
+  root.setProperty('--team-primary-rgb', hexToRgb(team.primary).join(', '));
+  root.setProperty('--team-accent-rgb', hexToRgb(team.accent).join(', '));
+}
+
+function applyTeamIdentity(team) {
+  document.title = `${team.name} Dashboard`;
+  document.getElementById('header-team-name').textContent = team.name;
+  document.getElementById('header-logo').src = `https://www.mlbstatic.com/team-logos/${currentTeamId}.svg`;
+  document.getElementById('header-logo').alt = team.abbr;
+}
+
+/* ─── Team picker UI ─── */
+function renderTeamPicker() {
+  const grid = document.getElementById('team-picker-grid');
+  const sorted = Object.entries(TEAMS).sort((a, b) => a[1].name.localeCompare(b[1].name));
+  grid.innerHTML = sorted.map(([id, t]) => `
+    <button class="team-option ${parseInt(id) === currentTeamId ? 'current' : ''}" data-team-id="${id}">
+      <img src="https://www.mlbstatic.com/team-logos/${id}.svg" alt="" onerror="this.style.visibility='hidden'">
+      <span>${t.name}</span>
+    </button>
+  `).join('');
+  grid.querySelectorAll('.team-option').forEach(btn => {
+    btn.addEventListener('click', () => switchTeam(parseInt(btn.dataset.teamId, 10)));
+  });
+}
+
+function switchTeam(teamId) {
+  if (!TEAMS[teamId] || teamId === currentTeamId) return;
+  localStorage.setItem('dashboardTeam', String(teamId));
+  const url = new URL(window.location.href);
+  url.searchParams.set('team', String(teamId));
+  window.location.href = url.toString();
+}
+
+function wireTeamPicker() {
+  const trigger = document.getElementById('team-picker-trigger');
+  const panel = document.getElementById('team-picker-panel');
+  const toggle = (e) => {
+    e.stopPropagation();
+    panel.hidden = !panel.hidden;
+  };
+  trigger.addEventListener('click', toggle);
+  trigger.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(e); }
+    if (e.key === 'Escape') panel.hidden = true;
+  });
+  document.addEventListener('click', (e) => {
+    if (!panel.contains(e.target) && !trigger.contains(e.target)) panel.hidden = true;
+  });
+}
+
+/* ─── Date helpers ─── */
+function isoDate(daysFromToday) {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromToday);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+async function fetchJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+  return res.json();
+}
+
+/* ─── Schedule / calendar ─── */
+
+async function fetchScheduleByDate(startDate, endDate) {
+  const url = `${API_BASE}/schedule?sportId=1&teamId=${currentTeamId}&startDate=${startDate}&endDate=${endDate}&hydrate=probablePitcher`;
+  const data = await fetchJSON(url);
+  const map = {};
+  for (const d of data.dates) map[d.date] = d.games;
+  return map;
+}
+
+function shortName(fullName) {
+  if (!fullName) return '';
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length < 2) return fullName;
+  return `${parts[0][0]}. ${parts.slice(1).join(' ')}`;
+}
+
+function gameInfo(g) {
+  const isHome = g.teams.home.team.id === currentTeamId;
+  const oppTeam = isHome ? g.teams.away.team : g.teams.home.team;
+  return {
+    isHome,
+    oppId: oppTeam.id,
+    oppAbbr: TEAMS[oppTeam.id]?.abbr || oppTeam.name?.slice(0, 3).toUpperCase() || '???',
+    teamScore: isHome ? g.teams.home.score : g.teams.away.score,
+    oppScore: isHome ? g.teams.away.score : g.teams.home.score,
+    state: g.status.detailedState,
+    abstractState: g.status.abstractGameState,
+    gameDate: g.gameDate,
+    teamPitcher: isHome ? g.teams.home.probablePitcher : g.teams.away.probablePitcher,
+  };
+}
+
+function renderGame(g) {
+  const i = gameInfo(g);
+  const prefix = i.isHome ? 'vs' : '@';
+  const logo = `https://www.mlbstatic.com/team-logos/${i.oppId}.svg`;
+
+  let statusHtml = '';
+  let resultHtml = '';
+  if (i.state === 'Final' && i.teamScore !== undefined && i.oppScore !== undefined) {
+    const won = i.teamScore > i.oppScore;
+    statusHtml = `<div class="status">Final</div>`;
+    resultHtml = `<div class="result ${won ? 'win' : 'loss'}">${won ? 'W' : 'L'} ${i.teamScore}–${i.oppScore}</div>`;
+  } else if (i.state === 'Postponed') {
+    statusHtml = `<div class="status"><span class="badge ppd">PPD</span></div>`;
+  } else if (i.state === 'Cancelled') {
+    statusHtml = `<div class="status"><span class="badge cxl">CXL</span></div>`;
+  } else if (i.state === 'Suspended') {
+    statusHtml = `<div class="status"><span class="badge susp">SUSP</span></div>`;
+  } else if (i.abstractState === 'Live') {
+    statusHtml = `<div class="status"><span class="badge live">LIVE</span></div>`;
+    resultHtml = `<div class="result">${i.teamScore ?? 0}–${i.oppScore ?? 0}</div>`;
+  } else {
+    const time = new Date(i.gameDate).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    statusHtml = `<div class="status">${time}</div>`;
+  }
+  if (!resultHtml) resultHtml = '<div class="result"></div>';
+
+  const pitcherBlock = i.teamPitcher?.fullName
+    ? `<div class="pitcher" title="${i.teamPitcher.fullName}"><span class="pitcher-label">SP</span>${shortName(i.teamPitcher.fullName)}</div>`
+    : '';
+
+  return `<div class="game-cell">
+    <img class="logo" src="${logo}" alt="${i.oppAbbr}" onerror="this.style.visibility='hidden'">
+    <div class="matchup"><span class="prefix">${prefix}</span>${i.oppAbbr}</div>
+    ${statusHtml}
+    ${resultHtml}
+    ${pitcherBlock}
+  </div>`;
+}
+
+function dayStatus(games) {
+  if (games.length === 0) return 'empty';
+  const decided = games
+    .filter(g => g.status.detailedState === 'Final'
+      && g.teams.home.score !== undefined
+      && g.teams.away.score !== undefined)
+    .map(g => {
+      const isHome = g.teams.home.team.id === currentTeamId;
+      const rs = isHome ? g.teams.home.score : g.teams.away.score;
+      const os = isHome ? g.teams.away.score : g.teams.home.score;
+      return rs > os ? 'win' : 'loss';
+    });
+  if (decided.length === 0) return 'other-game';
+  if (decided.every(r => r === 'win')) return 'win';
+  if (decided.every(r => r === 'loss')) return 'loss';
+  return 'other-game';
+}
+
+function renderDay(date, offset, games) {
+  const d = new Date(date + 'T12:00:00');
+  const weekday = d.toLocaleDateString(undefined, { weekday: 'short' });
+  const monthDay = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const isToday = offset === 0;
+  const classes = ['day', dayStatus(games)];
+  if (isToday) classes.push('today');
+
+  const body = games.length === 0
+    ? `<div class="empty-note">—</div>`
+    : games.map(renderGame).join('');
+
+  return `<div class="${classes.join(' ')}">
+    <div class="day-label">${weekday}</div>
+    <div class="day-num">${monthDay}</div>
+    ${body}
+  </div>`;
+}
+
+async function loadSchedule() {
+  const byDate = await fetchScheduleByDate(isoDate(-5), isoDate(5));
+  const cells = [];
+  for (let offset = -5; offset <= 5; offset++) {
+    const date = isoDate(offset);
+    cells.push(renderDay(date, offset, byDate[date] || []));
+  }
+  const el = document.getElementById('calendar');
+  el.classList.remove('loading');
+  el.classList.add('calendar');
+  el.innerHTML = cells.join('');
+
+  const wrap = el.parentElement;
+  if (wrap.scrollWidth > wrap.clientWidth) {
+    wrap.scrollLeft = (wrap.scrollWidth - wrap.clientWidth) / 2;
+  }
+}
+
+/* ─── Stat leaders ─── */
+
+// 0.75-qualifying thresholds (vs MLB's official 3.1 PA / 1.0 IP per game).
+// A compromise between the strict qualifying rule and a half-qualifying display:
+// stricter than half, looser than full. Keeps small-sample names off the cards
+// while still producing more than 1-2 qualified candidates per team.
+function seasonHittingCategories() {
+  const minPA = Math.max(Math.round(teamGamesPlayed * 2.3), 25);
+  return [
+    { key: 'avg',      label: 'AVG', format: 'pct',    min: { plateAppearances: minPA } },
+    { key: 'homeRuns', label: 'HR',  format: 'int' },
+    { key: 'rbi',      label: 'RBI', format: 'int' },
+    { key: 'ops',      label: 'OPS', format: 'pct',    min: { plateAppearances: minPA } },
+  ];
+}
+
+function seasonPitchingCategories() {
+  const minIP = Math.max(Math.round(teamGamesPlayed * 0.75), 10);
+  return [
+    { key: 'era',        label: 'ERA',  format: 'fixed2', asc: true, min: { inningsPitched: minIP } },
+    { key: 'strikeOuts', label: 'K',    format: 'int' },
+    { key: 'wins',       label: 'W',    format: 'int' },
+    { key: 'whip',       label: 'WHIP', format: 'fixed2', asc: true, min: { inningsPitched: minIP } },
+  ];
+}
+
+// Hot (last 10 days) uses fixed thresholds for the 10-day window:
+//   ~3 games' worth of PAs for hitters, ~one start's worth of IP for pitchers
+const HOT_HITTING = [
+  { key: 'avg',      label: 'AVG', format: 'pct', min: { plateAppearances: 12 } },
+  { key: 'homeRuns', label: 'HR',  format: 'int' },
+  { key: 'rbi',      label: 'RBI', format: 'int' },
+  { key: 'ops',      label: 'OPS', format: 'pct', min: { plateAppearances: 12 } },
+];
+
+const HOT_PITCHING = [
+  { key: 'era',        label: 'ERA',  format: 'fixed2', asc: true, min: { inningsPitched: 5 } },
+  { key: 'strikeOuts', label: 'K',    format: 'int' },
+  { key: 'wins',       label: 'W',    format: 'int' },
+  { key: 'whip',       label: 'WHIP', format: 'fixed2', asc: true, min: { inningsPitched: 5 } },
+];
+
+async function fetchPlayerStats({ group, type, startDate, endDate }) {
+  const params = new URLSearchParams({
+    stats: type,
+    group,
+    teamId: String(currentTeamId),
+    season: String(new Date().getFullYear()),
+    playerPool: 'all',
+    limit: '50',
+  });
+  if (startDate) params.set('startDate', startDate);
+  if (endDate) params.set('endDate', endDate);
+  const data = await fetchJSON(`${API_BASE}/stats?${params}`);
+  return data.stats?.[0]?.splits ?? [];
+}
+
+function getLeader(splits, cat) {
+  const filtered = splits.filter(s => {
+    const v = s.stat[cat.key];
+    if (v === undefined || v === null || v === '') return false;
+    if (cat.min) {
+      for (const [minKey, minVal] of Object.entries(cat.min)) {
+        if (parseFloat(s.stat[minKey] ?? 0) < minVal) return false;
+      }
+    }
+    return true;
+  });
+  filtered.sort((a, b) => {
+    const av = parseFloat(a.stat[cat.key]);
+    const bv = parseFloat(b.stat[cat.key]);
+    return cat.asc ? av - bv : bv - av;
+  });
+  return filtered[0];
+}
+
+function formatStatValue(val, format) {
+  if (val === undefined || val === null) return '–';
+  const num = parseFloat(val);
+  if (Number.isNaN(num)) return String(val);
+  if (format === 'pct') return num >= 1 ? num.toFixed(3) : num.toFixed(3).replace(/^0/, '');
+  if (format === 'fixed2') return num.toFixed(2);
+  return String(val);
+}
+
+function playerPhotoUrl(playerId) {
+  return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_120,q_auto:best/v1/people/${playerId}/headshot/67/current`;
+}
+
+function renderStatCard(cat, leader) {
+  if (!leader) {
+    return `<div class="stat-card empty">
+      <div class="stat-card-body">
+        <div class="stat-name">${cat.label}</div>
+        <div class="stat-value">–</div>
+        <div class="stat-player">No qualified player</div>
+      </div>
+    </div>`;
+  }
+  const photo = playerPhotoUrl(leader.player.id);
+  const value = formatStatValue(leader.stat[cat.key], cat.format);
+  return `<div class="stat-card">
+    <img class="player-photo" src="${photo}" alt="${leader.player.fullName}" onerror="this.style.visibility='hidden'">
+    <div class="stat-card-body">
+      <div class="stat-name">${cat.label}</div>
+      <div class="stat-value">${value}</div>
+      <div class="stat-player">${leader.player.fullName}</div>
+    </div>
+  </div>`;
+}
+
+async function loadStatBox(elementId, fetchOpts, categories) {
+  const splits = await fetchPlayerStats(fetchOpts);
+  const el = document.getElementById(elementId);
+  el.classList.remove('loading');
+  el.innerHTML = categories.map(c => renderStatCard(c, getLeader(splits, c))).join('');
+}
+
+const loadSeasonHitting  = () => loadStatBox('season-hitting',  { group: 'hitting',  type: 'season' },      seasonHittingCategories());
+const loadSeasonPitching = () => loadStatBox('season-pitching', { group: 'pitching', type: 'season' },      seasonPitchingCategories());
+const loadHotHitting     = () => loadStatBox('hot-hitting',     { group: 'hitting',  type: 'byDateRange', startDate: isoDate(-10), endDate: isoDate(0) }, HOT_HITTING);
+const loadHotPitching    = () => loadStatBox('hot-pitching',    { group: 'pitching', type: 'byDateRange', startDate: isoDate(-10), endDate: isoDate(0) }, HOT_PITCHING);
+
+/* ─── News feed ─── */
+
+async function fetchMlbNews() {
+  const url = `https://dapi.cms.mlbinfra.com/v2/content/en-us/sel-t${currentTeamId}-news-list`;
+  const data = await fetchJSON(url);
+  const teamSlug = `teamid-${currentTeamId}`;
+  const teamUrlSlug = currentTeam.short.toLowerCase().replace(/[\s-]/g, '');
+  return (data.items || [])
+    .filter(it => {
+      if (it.type !== 'story') return false;
+      if (!it.headline) return false;
+      const tagSlugs = (it.tags || []).map(t => t.slug);
+      return tagSlugs.includes(teamSlug) && tagSlugs.includes('apple-news');
+    })
+    .map(it => ({
+      source: 'MLB.com',
+      headline: it.headline,
+      summary: (it.summary || '').replace(/<[^>]*>/g, '').trim(),
+      url: `https://www.mlb.com/${teamUrlSlug}/news/${it.slug}`,
+      thumb: it.thumbnail?.thumbnailUrl || '',
+      date: it.contentDate ? new Date(it.contentDate) : null,
+    }));
+}
+
+async function fetchEspnNews() {
+  const url = `https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/news?team=${currentTeam.espnId}&limit=20`;
+  const data = await fetchJSON(url);
+  return (data.articles || [])
+    .filter(a => {
+      if (a.premium) return false;
+      if (!a.headline) return false;
+      const href = a.links?.web?.href || '';
+      if (href.includes('/video/') || href.includes('/clip')) return false;
+      return true;
+    })
+    .map(a => ({
+      source: 'ESPN',
+      headline: a.headline,
+      summary: (a.description || '').trim(),
+      url: a.links?.web?.href || '',
+      thumb: a.images?.[0]?.url || '',
+      date: a.published ? new Date(a.published) : null,
+    }));
+}
+
+async function loadNews() {
+  const results = await Promise.allSettled([fetchMlbNews(), fetchEspnNews()]);
+  const items = results
+    .filter(r => r.status === 'fulfilled')
+    .flatMap(r => r.value);
+
+  items.sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0));
+  const top = items.slice(0, 5);
+
+  const el = document.getElementById('news');
+  el.classList.remove('loading');
+  if (top.length === 0) { el.innerHTML = '<div class="empty-note">No recent stories.</div>'; return; }
+  el.innerHTML = '<div class="news-list">' + top.map(renderNewsItem).join('') + '</div>';
+}
+
+function renderNewsItem(item) {
+  const date = item.date
+    ? item.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : '';
+  return `<a class="news-item" href="${item.url}" target="_blank" rel="noopener">
+    ${item.thumb ? `<img class="news-thumb" src="${item.thumb}" alt="" onerror="this.style.visibility='hidden'">` : ''}
+    <div class="news-body">
+      <div class="news-headline">${item.headline}</div>
+      <div class="news-summary">${item.summary}</div>
+      <div class="news-meta"><span class="news-source">${item.source}</span>${date ? '· ' + date : ''}</div>
+    </div>
+  </a>`;
+}
+
+/* ─── Standings ─── */
+
+function formatPct(pct) {
+  if (pct >= 1) return '1.000';
+  return pct.toFixed(3).slice(1);
+}
+
+function renderStandingsTable(teams, getRank) {
+  const rows = teams.map((t, i) => {
+    const isCurrent = t.id === currentTeamId;
+    const logo = `https://www.mlbstatic.com/team-logos/${t.id}.svg`;
+    return `<tr class="${isCurrent ? 'team-row' : ''}">
+      <td class="pos">${getRank(t, i)}</td>
+      <td>
+        <div class="team-cell">
+          <img class="team-logo" src="${logo}" alt="${t.abbr}" onerror="this.style.visibility='hidden'">
+          <span>${t.name}</span>
+        </div>
+      </td>
+      <td>${t.wins}–${t.losses}</td>
+      <td>${formatPct(t.pct)}</td>
+      <td><span class="last10-w">${t.lastTen.wins}</span>–<span class="last10-l">${t.lastTen.losses}</span></td>
+    </tr>`;
+  }).join('');
+
+  return `<table class="standings-table">
+    <thead>
+      <tr><th>#</th><th>Team</th><th>W–L</th><th>Pct</th><th>Last 10</th></tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// Cached info from standings fetch — used by playoff section's "Win <Division>" label
+let cachedDivisionName = '';
+
+async function loadStandings() {
+  const season = new Date().getFullYear();
+  const data = await fetchJSON(`${API_BASE}/standings?leagueId=103,104&season=${season}`);
+
+  const allTeams = [];
+  let teamDivisionId = null;
+  let teamDivisionShort = '';
+
+  for (const division of data.records) {
+    for (const t of division.teamRecords) {
+      const lastTenRec = t.records?.splitRecords?.find(r => r.type === 'lastTen');
+      const team = {
+        id: t.team.id,
+        name: t.team.name,
+        abbr: TEAMS[t.team.id]?.abbr || '',
+        wins: t.wins,
+        losses: t.losses,
+        pct: parseFloat(t.winningPercentage),
+        divisionRank: parseInt(t.divisionRank, 10),
+        divisionId: division.division.id,
+        lastTen: { wins: lastTenRec?.wins ?? 0, losses: lastTenRec?.losses ?? 0 },
+      };
+      allTeams.push(team);
+      if (t.team.id === currentTeamId) {
+        teamDivisionId = division.division.id;
+        teamDivisionShort = DIVISIONS[teamDivisionId] || 'Division';
+        teamGamesPlayed = t.wins + t.losses;
+      }
+    }
+  }
+  cachedDivisionName = teamDivisionShort;
+
+  const divisionTeams = allTeams
+    .filter(t => t.divisionId === teamDivisionId)
+    .sort((a, b) => a.divisionRank - b.divisionRank);
+
+  allTeams.sort((a, b) => b.pct - a.pct);
+  const teamIdx = allTeams.findIndex(t => t.id === currentTeamId);
+  const startIdx = teamIdx < 4 ? 0 : teamIdx - 4;
+  const mlbTopTeams = allTeams.slice(startIdx, startIdx + 5);
+
+  const myTeam = divisionTeams.find(t => t.id === currentTeamId);
+  if (myTeam) {
+    document.getElementById('header-record').innerHTML = `
+      <div class="record-line">${myTeam.wins}–${myTeam.losses}</div>
+      <div class="record-sub">${formatPct(myTeam.pct)} · ${teamDivisionShort} #${myTeam.divisionRank}</div>
+    `;
+  }
+
+  const el = document.getElementById('standings');
+  el.classList.remove('loading');
+  el.innerHTML = `
+    <div class="standings-grid">
+      <div class="standings-block">
+        <h3>${teamDivisionShort}</h3>
+        ${renderStandingsTable(divisionTeams, t => t.divisionRank)}
+      </div>
+      <div class="standings-block">
+        <h3>MLB — ${currentTeam.short} & 4 Above (Win %)</h3>
+        ${renderStandingsTable(mlbTopTeams, (_, i) => startIdx + i + 1)}
+      </div>
+    </div>
+  `;
+}
+
+/* ─── Playoff odds ─── */
+
+async function loadPlayoffOdds() {
+  const data = await fetchJSON('https://www.fangraphs.com/api/playoff-odds/odds?dateDelta=&projectionMode=2&standingsType=lg');
+  const team = data.find(t => t.shortName === currentTeam.short || t.abbName === currentTeam.abbr);
+  if (!team) throw new Error(`${currentTeam.name} not found in odds data`);
+
+  const e = team.endData;
+  const fmt = (v) => (v * 100 < 0.05 ? '< 0.1' : (v * 100).toFixed(1)) + '%';
+
+  const expW = Math.round(e.ExpW);
+  const expL = Math.round(e.ExpL);
+  const expPct = expW / (expW + expL);
+  const divLabel = cachedDivisionName ? `Win ${cachedDivisionName}` : 'Win Division';
+
+  const el = document.getElementById('playoff-odds');
+  el.classList.remove('loading');
+  el.innerHTML = `
+    <div class="projection-hero">
+      <div class="projection-label">Projected Final Record</div>
+      <div class="projection-value">${expW}–${expL}</div>
+      <div class="projection-sub">${formatPct(expPct)} win percentage</div>
+    </div>
+    <div class="odds-grid">
+      <div class="odds-card">
+        <div class="odds-value">${fmt(e.poffTitle)}</div>
+        <div class="odds-label">Make Playoffs</div>
+      </div>
+      <div class="odds-card">
+        <div class="odds-value">${fmt(e.divTitle)}</div>
+        <div class="odds-label">${divLabel}</div>
+      </div>
+      <div class="odds-card">
+        <div class="odds-value">${fmt(e.wcTitle)}</div>
+        <div class="odds-label">Wild Card</div>
+      </div>
+      <div class="odds-card">
+        <div class="odds-value">${fmt(e.wsWin)}</div>
+        <div class="odds-label">Win World Series</div>
+      </div>
+    </div>
+    <div class="odds-projection">Source: FanGraphs (ZiPS + Steamer composite)</div>
+  `;
+}
+
+/* ─── Init ─── */
+
+function setSubtitle() {
+  document.getElementById('today').textContent =
+    'Dashboard · ' + new Date().toLocaleDateString(undefined, {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
+    });
+}
+
+function showError(id) {
+  return (err) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.classList.remove('loading');
+      el.innerHTML = `<div class="error">Couldn't load: ${err.message}</div>`;
+    }
+    console.error(err);
+  };
+}
+
+async function init() {
+  applyTeamTheme(currentTeam);
+  applyTeamIdentity(currentTeam);
+  setSubtitle();
+  renderTeamPicker();
+  wireTeamPicker();
+
+  // Standings runs first — sets teamGamesPlayed which the season stat thresholds rely on
+  await loadStandings().catch(showError('standings'));
+
+  const tasks = [
+    ['calendar',        loadSchedule],
+    ['season-hitting',  loadSeasonHitting],
+    ['season-pitching', loadSeasonPitching],
+    ['hot-hitting',     loadHotHitting],
+    ['hot-pitching',    loadHotPitching],
+    ['news',            loadNews],
+    ['playoff-odds',    loadPlayoffOdds],
+  ];
+  for (const [id, fn] of tasks) {
+    fn().catch(showError(id));
+  }
+}
+
+init();
+</script>
+</body>
+</html>
