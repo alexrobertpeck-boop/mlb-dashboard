@@ -40,7 +40,7 @@
     border-bottom: 3px solid var(--team-accent);
     position: relative;
     border-radius: 14px 14px 0 0;
-    overflow: hidden;
+    /* No overflow:hidden so the team-picker panel can extend below the header. */
   }
   header::after {
     content: '';
@@ -594,6 +594,7 @@
     height: 56px;
     border-radius: 50%;
     object-fit: cover;
+    object-position: top; /* show top of headshot so caps aren't clipped */
     background: #fff;
     border: 2px solid var(--team-accent);
     flex-shrink: 0;
@@ -1136,6 +1137,14 @@
     font-size: 0.95em;
   }
 
+  /* Landing page (Home Plate) — extra breathing room and louder stat values */
+  #landing-view section { padding: 32px 28px; }
+  #landing-view section + section { border-top: 1px solid #f0f0f0; }
+  #landing-view .stat-value { font-size: 1.65em; }
+  #landing-view .stat-name { font-size: 0.72em; }
+  #landing-view .overview-card { padding: 18px 20px; }
+  #landing-view h2 { margin-bottom: 18px; }
+
   /* View-based show/hide */
   main[data-view="landing"]    #team-view,
   main[data-view="landing"]    #attendance-view { display: none; }
@@ -1226,17 +1235,30 @@
     box-shadow: 0 2px 8px rgba(26,122,58,0.35);
   }
 
-  /* Utility-bar nav link (shared by Return to Dashboard + Stadiums link) */
+  /* Utility-bar nav link (Stadiums pill, matches My Teams pill style) */
   .utility-link {
-    color: rgba(255,255,255,0.92);
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 0.68em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: white;
     text-decoration: none;
-    font-weight: 600;
-    font-size: 0.82em;
-    padding: 4px 10px;
-    border-radius: 6px;
-    transition: background 0.15s ease;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s ease, border-color 0.15s ease;
   }
-  .utility-link:hover { background: rgba(255,255,255,0.12); }
+  .utility-link:hover {
+    background: rgba(255,255,255,0.3);
+    border-color: rgba(255,255,255,0.6);
+  }
+
+  /* Hide the Switch Team picker when logged in — saved-team users navigate via Home Plate */
+  body.logged-in main[data-view="team"] .header-chevron { display: none; }
+  body.logged-in main[data-view="team"] .header-brand { cursor: default; pointer-events: none; }
 
   /* ─── Games log ─── */
   .games-add-btn {
@@ -1447,13 +1469,13 @@
   <header>
     <div class="utility-bar">
       <div class="utility-left">
-        <a href="/" class="return-link" id="return-link" hidden aria-label="Return to Dashboard">
+        <a href="/" class="return-link" id="return-link" hidden aria-label="Home Plate">
           <span aria-hidden="true">←</span>
-          <span class="return-label">Return to Dashboard</span>
+          <span class="return-label">Home Plate</span>
         </a>
-        <a href="/?view=attendance" class="utility-link" id="stadiums-link" hidden>My Stadiums</a>
       </div>
       <div class="utility-right">
+        <a href="/?view=attendance" class="utility-link" id="stadiums-link" hidden>My Stadiums</a>
         <div class="auth-area" id="auth-area"></div>
       </div>
     </div>
@@ -1754,8 +1776,9 @@ function applyTeamTheme(team) {
 }
 
 function applyTeamIdentity(team) {
-  document.title = `162-0 · ${team.short}`;
-  document.getElementById('header-team-name').textContent = team.name;
+  const dugoutLabel = `${team.short} Dugout`;
+  document.title = `162-0 · ${dugoutLabel}`;
+  document.getElementById('header-team-name').textContent = dugoutLabel;
   document.getElementById('header-logo').src = `https://www.mlbstatic.com/team-logos/${currentTeamId}.svg`;
   document.getElementById('header-logo').alt = team.abbr;
 }
@@ -2197,7 +2220,7 @@ function infoIconHtml(info) {
   return `<span class="info-icon" data-tip="${safe}" aria-label="What is this stat?">i</span>`;
 }
 
-function renderStatCard(cat, leader) {
+function renderStatCard(cat, leader, opts = {}) {
   const nameHtml = `${cat.label}${infoIconHtml(cat.info)}`;
   if (!leader) {
     return `<div class="stat-card empty">
@@ -2210,12 +2233,15 @@ function renderStatCard(cat, leader) {
   }
   const photo = playerPhotoUrl(leader.player.id);
   const value = formatStatValue(leader.stat[cat.key], cat.format);
+  // On league-wide leaderboards, append the player's team. On team pages it's redundant.
+  const teamShort = opts.showTeam && leader.team?.id ? TEAMS[leader.team.id]?.short : null;
+  const playerLine = teamShort ? `${leader.player.fullName}, ${teamShort}` : leader.player.fullName;
   return `<div class="stat-card">
     <img class="player-photo" src="${photo}" alt="${leader.player.fullName}" onerror="this.style.visibility='hidden'">
     <div class="stat-card-body">
       <div class="stat-name">${nameHtml}</div>
       <div class="stat-value">${value}</div>
-      <div class="stat-player">${leader.player.fullName}</div>
+      <div class="stat-player">${playerLine}</div>
     </div>
   </div>`;
 }
@@ -2234,8 +2260,8 @@ function wireInfoIcons() {
   });
 }
 
-function renderStatGrid(splits, categories) {
-  return `<div class="stat-cards">${categories.map(c => renderStatCard(c, getLeader(splits, c))).join('')}</div>`;
+function renderStatGrid(splits, categories, opts = {}) {
+  return `<div class="stat-cards">${categories.map(c => renderStatCard(c, getLeader(splits, c), opts)).join('')}</div>`;
 }
 
 async function loadStatBox(elementId, fetchOpts, categories) {
@@ -2547,9 +2573,9 @@ async function loadLeagueLeaders(elementId, group, categories) {
   const el = document.getElementById(elementId);
   el.classList.remove('loading');
   el.innerHTML = `
-    ${renderStatGrid(splits, categories.advanced)}
+    ${renderStatGrid(splits, categories.advanced, { showTeam: true })}
     <div class="stat-divider"></div>
-    ${renderStatGrid(splits, categories.basic)}
+    ${renderStatGrid(splits, categories.basic, { showTeam: true })}
   `;
 }
 
@@ -3263,7 +3289,6 @@ function renderAuthArea(user) {
     el.innerHTML = `
       <div class="auth-user-info">
         <button class="my-teams-btn" id="my-teams-btn">My Teams<span class="my-teams-count" id="my-teams-count"></span></button>
-        <span class="auth-email">${user.email}</span>
         <button class="auth-logout-btn" id="auth-logout-btn">Log out</button>
       </div>
     `;
@@ -3504,6 +3529,9 @@ async function init() {
   const main = document.querySelector('main');
   main.dataset.view = view;
 
+  // Mark body as logged-in (used to hide the Switch Team picker on team pages)
+  if (user) document.body.classList.add('logged-in');
+
   // Utility-bar nav links: visible based on which view we're on
   if (user) {
     if (view !== 'landing')    document.getElementById('return-link').hidden = false;
@@ -3519,8 +3547,8 @@ async function init() {
   }
 
   if (view === 'landing') {
-    document.title = '162-0 · MLB Dashboard';
-    document.getElementById('header-team-name').textContent = 'Your Teams';
+    document.title = '162-0 · Home Plate';
+    document.getElementById('header-team-name').textContent = 'Home Plate';
     // Don't apply team theme — landing keeps the default MLB blue/red palette
     await loadLanding();
     return;
