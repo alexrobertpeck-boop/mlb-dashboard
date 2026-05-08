@@ -91,6 +91,10 @@
     background: rgba(255,255,255,0.3);
     border-color: rgba(255,255,255,0.6);
   }
+  /* Make sure the [hidden] HTML attribute actually hides these elements —
+     the unified rule above sets display:inline-flex which would otherwise win. */
+  .return-link[hidden], .utility-link[hidden],
+  .my-teams-btn[hidden], .auth-logout-btn[hidden] { display: none; }
 
   .team-header {
     display: flex;
