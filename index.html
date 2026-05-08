@@ -882,6 +882,87 @@
     .teams-grid { grid-template-columns: 1fr; }
   }
 
+  /* ─── Around MLB overview cards ─── */
+  .overview-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  @media (max-width: 600px) {
+    .overview-row { grid-template-columns: 1fr; }
+  }
+  .overview-card {
+    background: #fafafa;
+    border: 1px solid #ececec;
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .overview-card-logo {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  .overview-card-body { flex: 1; min-width: 0; }
+  .overview-card-label {
+    font-size: 0.68em;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #777;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+  .overview-card-team { font-weight: 700; font-size: 1em; }
+  .overview-card-meta { font-size: 0.85em; color: #666; margin-top: 2px; }
+  .overview-card-streak {
+    font-size: 1.6em;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--team-primary);
+    min-width: 50px;
+    text-align: right;
+  }
+  .overview-card-streak.loss { color: #b3261e; }
+  .overview-card-streak.win  { color: #1a7a3a; }
+
+  .ws-picks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .ws-pick-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: white;
+    border: 1px solid #f0f0f0;
+    border-radius: 6px;
+  }
+  .ws-pick-rank {
+    font-weight: 800;
+    width: 22px;
+    color: #999;
+    font-size: 0.95em;
+  }
+  .ws-pick-logo {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  .ws-pick-team { flex: 1; font-weight: 600; }
+  .ws-pick-pct {
+    font-weight: 800;
+    font-size: 1.05em;
+    color: var(--team-primary);
+  }
+
   /* ─── Landing page (multi-team overview) ─── */
   .landing-grid {
     display: grid;
@@ -1074,6 +1155,25 @@
   </header>
 
   <div id="landing-view">
+    <section>
+      <h2>Around MLB</h2>
+      <div id="mlb-overview" class="loading">Loading…</div>
+    </section>
+
+    <section>
+      <h2>League Leaders</h2>
+      <div class="stat-pair">
+        <div class="stat-box">
+          <h3>Hitting</h3>
+          <div id="league-hitting" class="loading">Loading…</div>
+        </div>
+        <div class="stat-box">
+          <h3>Pitching</h3>
+          <div id="league-pitching" class="loading">Loading…</div>
+        </div>
+      </div>
+    </section>
+
     <section>
       <h2>Your Teams</h2>
       <div class="landing-grid" id="landing-grid"></div>
@@ -1873,6 +1973,177 @@ async function loadPlayoffOdds() {
   `;
 }
 
+/* ─── Around MLB overview (top of landing) ─── */
+
+const LEAGUE_HITTING = {
+  advanced: [
+    { key: 'wRcPlus', label: 'wRC+', format: 'int',    info: STAT_INFO.wRcPlus },
+    { key: 'war',     label: 'WAR',  format: 'fixed1', info: STAT_INFO.warHit },
+  ],
+  basic: [
+    { key: 'avg',      label: 'AVG', format: 'pct' },
+    { key: 'homeRuns', label: 'HR',  format: 'int' },
+    { key: 'rbi',      label: 'RBI', format: 'int' },
+    { key: 'ops',      label: 'OPS', format: 'pct' },
+  ],
+};
+
+const LEAGUE_PITCHING = {
+  advanced: [
+    { key: 'fip', label: 'FIP', format: 'fixed2', asc: true, info: STAT_INFO.fip },
+    { key: 'war', label: 'WAR', format: 'fixed1', info: STAT_INFO.warPit },
+  ],
+  basic: [
+    { key: 'era',        label: 'ERA',  format: 'fixed2', asc: true },
+    { key: 'strikeOuts', label: 'K',    format: 'int' },
+    { key: 'wins',       label: 'W',    format: 'int' },
+    { key: 'whip',       label: 'WHIP', format: 'fixed2', asc: true },
+  ],
+};
+
+async function fetchLeagueStats(group, type) {
+  const params = new URLSearchParams({
+    stats: type,
+    group,
+    sportId: '1',
+    season: String(new Date().getFullYear()),
+    playerPool: 'qualified',
+    limit: '500',
+  });
+  const data = await fetchJSON(`${API_BASE}/stats?${params}`);
+  return data.stats?.[0]?.splits ?? [];
+}
+
+async function loadLeagueLeaders(elementId, group, categories) {
+  const [season, saber] = await Promise.all([
+    fetchLeagueStats(group, 'season'),
+    fetchLeagueStats(group, 'sabermetrics'),
+  ]);
+  const saberByPlayer = new Map(saber.map(s => [s.player.id, s.stat]));
+  const splits = season.map(s => ({
+    ...s,
+    stat: { ...s.stat, ...(saberByPlayer.get(s.player.id) || {}) },
+  }));
+  const el = document.getElementById(elementId);
+  el.classList.remove('loading');
+  el.innerHTML = `
+    ${renderStatGrid(splits, categories.advanced)}
+    <div class="stat-divider"></div>
+    ${renderStatGrid(splits, categories.basic)}
+  `;
+}
+
+const loadLeagueHitting  = () => loadLeagueLeaders('league-hitting',  'hitting',  LEAGUE_HITTING);
+const loadLeaguePitching = () => loadLeagueLeaders('league-pitching', 'pitching', LEAGUE_PITCHING);
+
+async function loadMlbOverview() {
+  const season = new Date().getFullYear();
+  const [standingsData, oddsData] = await Promise.all([
+    fetchJSON(`${API_BASE}/standings?leagueId=103,104&season=${season}`),
+    fetchJSON('https://www.fangraphs.com/api/playoff-odds/odds?dateDelta=&projectionMode=2&standingsType=lg').catch(() => []),
+  ]);
+
+  // Flatten teams from standings
+  const teams = [];
+  for (const div of standingsData.records) {
+    for (const t of div.teamRecords) {
+      teams.push({
+        id: t.team.id,
+        name: t.team.name,
+        leagueId: div.league?.id,
+        wins: t.wins,
+        losses: t.losses,
+        pct: parseFloat(t.winningPercentage),
+        streakType: t.streak?.streakType,
+        streakNumber: t.streak?.streakNumber ?? 0,
+        streakCode: t.streak?.streakCode,
+      });
+    }
+  }
+
+  const sortByPctDesc = (a, b) => b.pct - a.pct || b.wins - a.wins;
+  const alLeader = teams.filter(t => t.leagueId === 103).sort(sortByPctDesc)[0];
+  const nlLeader = teams.filter(t => t.leagueId === 104).sort(sortByPctDesc)[0];
+
+  const sortByStreak = (a, b) => b.streakNumber - a.streakNumber;
+  const longestWin  = teams.filter(t => t.streakType === 'wins').sort(sortByStreak)[0];
+  const longestLoss = teams.filter(t => t.streakType === 'losses').sort(sortByStreak)[0];
+
+  // FanGraphs WS picks
+  const teamsByShort = {};
+  for (const [id, t] of Object.entries(TEAMS)) teamsByShort[t.short] = parseInt(id, 10);
+  const wsPicks = (Array.isArray(oddsData) ? oddsData : [])
+    .map(t => ({
+      shortName: t.shortName,
+      mlbId: teamsByShort[t.shortName],
+      wsPct: t.endData?.wsWin ?? 0,
+    }))
+    .filter(p => p.mlbId)
+    .sort((a, b) => b.wsPct - a.wsPct)
+    .slice(0, 3);
+
+  const fmtPct = v => (v * 100 < 0.05 ? '< 0.1' : (v * 100).toFixed(1)) + '%';
+
+  const leaderCardHtml = (label, t) => {
+    if (!t) return `<div class="overview-card"><div class="overview-card-body"><div class="overview-card-label">${label}</div><div class="overview-card-meta">No data</div></div></div>`;
+    const logo = `https://www.mlbstatic.com/team-logos/${t.id}.svg`;
+    return `<div class="overview-card">
+      <img class="overview-card-logo" src="${logo}" alt="" onerror="this.style.visibility='hidden'">
+      <div class="overview-card-body">
+        <div class="overview-card-label">${label}</div>
+        <div class="overview-card-team">${t.name}</div>
+        <div class="overview-card-meta">${t.wins}–${t.losses} · ${formatPct(t.pct)}</div>
+      </div>
+    </div>`;
+  };
+
+  const streakCardHtml = (label, t, kind) => {
+    if (!t) return `<div class="overview-card"><div class="overview-card-body"><div class="overview-card-label">${label}</div><div class="overview-card-meta">No active streak</div></div></div>`;
+    const logo = `https://www.mlbstatic.com/team-logos/${t.id}.svg`;
+    return `<div class="overview-card">
+      <img class="overview-card-logo" src="${logo}" alt="" onerror="this.style.visibility='hidden'">
+      <div class="overview-card-body">
+        <div class="overview-card-label">${label}</div>
+        <div class="overview-card-team">${t.name}</div>
+        <div class="overview-card-meta">Currently ${t.wins}–${t.losses}</div>
+      </div>
+      <div class="overview-card-streak ${kind}">${t.streakCode}</div>
+    </div>`;
+  };
+
+  const wsRowHtml = (p, i) => {
+    const meta = TEAMS[p.mlbId];
+    const logo = `https://www.mlbstatic.com/team-logos/${p.mlbId}.svg`;
+    return `<div class="ws-pick-row">
+      <span class="ws-pick-rank">${i + 1}.</span>
+      <img class="ws-pick-logo" src="${logo}" alt="" onerror="this.style.visibility='hidden'">
+      <span class="ws-pick-team">${meta?.name || p.shortName}</span>
+      <span class="ws-pick-pct">${fmtPct(p.wsPct)}</span>
+    </div>`;
+  };
+
+  const wsCardHtml = wsPicks.length === 0
+    ? ''
+    : `<div class="overview-card overview-card-wide" style="display:block">
+        <div class="overview-card-label">World Series Picks (FanGraphs)</div>
+        <div class="ws-picks-list">${wsPicks.map(wsRowHtml).join('')}</div>
+      </div>`;
+
+  const el = document.getElementById('mlb-overview');
+  el.classList.remove('loading');
+  el.innerHTML = `
+    <div class="overview-row">
+      ${leaderCardHtml('AL Leader', alLeader)}
+      ${leaderCardHtml('NL Leader', nlLeader)}
+    </div>
+    <div class="overview-row">
+      ${streakCardHtml('Longest Active Win Streak', longestWin, 'win')}
+      ${streakCardHtml('Longest Active Loss Streak', longestLoss, 'loss')}
+    </div>
+    ${wsCardHtml}
+  `;
+}
+
 /* ─── Landing view (multi-team overview) ─── */
 
 async function fetchLandingData(teamIds) {
@@ -1993,6 +2264,11 @@ function renderLandingCard(team) {
 }
 
 async function loadLanding() {
+  // Around-MLB sections always load — independent of saved teams
+  loadMlbOverview().catch(showError('mlb-overview'));
+  loadLeagueHitting().catch(showError('league-hitting'));
+  loadLeaguePitching().catch(showError('league-pitching'));
+
   if (savedTeams.length === 0) {
     document.getElementById('landing-empty').hidden = false;
     document.getElementById('landing-grid').innerHTML = '';
