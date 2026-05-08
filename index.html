@@ -2414,18 +2414,20 @@ function wireAuthModal() {
   });
 }
 
-// Subscribe to auth state changes
-//   First event after page load (INITIAL_SESSION or equivalent first fire): just render
-//   Subsequent SIGNED_IN / SIGNED_OUT: navigate to / so the right view recalculates
-//   Anything else (TOKEN_REFRESHED, USER_UPDATED): just refresh the auth UI
-let authStateInitialized = false;
+// Subscribe to auth state changes.
+// Only navigate when the user actually changes (logged-in to logged-out, or
+// switched accounts). Token refreshes — which can fire SIGNED_IN in some Supabase
+// versions when a tab regains focus — leave the user the same, so they're ignored.
+let knownUserId; // undefined = not seen yet
 sb.auth.onAuthStateChange((event, session) => {
-  if (!authStateInitialized) {
-    authStateInitialized = true;
+  const userId = session?.user?.id ?? null;
+  if (knownUserId === undefined) {
+    knownUserId = userId;
     renderAuthArea(session?.user ?? null);
     return;
   }
-  if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+  if (userId !== knownUserId) {
+    knownUserId = userId;
     window.location.href = '/';
     return;
   }
