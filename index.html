@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MLB Dashboard</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <style>
   :root {
     /* Default = MLB league colors. Used for the loading flash and the landing page. */
@@ -1213,10 +1215,23 @@
     box-shadow: 0 4px 12px rgba(0,0,0,0.25);
   }
   .stadium-marker img {
-    width: 26px;
-    height: 26px;
+    width: 22px;
+    height: 22px;
     object-fit: contain;
     pointer-events: none;
+  }
+  /* Cluster icon for overlapping markers */
+  .stadium-cluster {
+    background: var(--team-primary);
+    color: white;
+    border-radius: 50%;
+    border: 3px solid white;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.95em;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
   }
   .stadium-marker.visited {
     background: white;
@@ -2667,6 +2682,22 @@ function renderStadiumMap() {
     maxZoom: 19,
   }).addTo(stadiumMap);
 
+  // Cluster overlapping markers so dense areas (NYC, Chicago, LA) are reachable.
+  // Click a cluster → markers spread out (spiderfy) so each is clickable.
+  const cluster = L.markerClusterGroup({
+    maxClusterRadius: 28,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+    spiderfyDistanceMultiplier: 1.6,
+    zoomToBoundsOnClick: false, // open spiderfy directly instead of zooming first
+    iconCreateFunction: (c) => L.divIcon({
+      className: 'stadium-cluster',
+      html: `<span>${c.getChildCount()}</span>`,
+      iconSize: [40, 40],
+      iconAnchor: [20, 20],
+    }),
+  });
+
   for (const [idStr, stadium] of Object.entries(STADIUMS)) {
     const teamId = parseInt(idStr, 10);
     const team = TEAMS[teamId];
@@ -2675,7 +2706,7 @@ function renderStadiumMap() {
     const marker = L.marker([stadium.lat, stadium.lng], {
       icon: createStadiumIcon(teamId, visited),
       title: `${team.name} — ${stadium.name}`,
-    }).addTo(stadiumMap);
+    });
 
     marker.bindTooltip(`<strong>${stadium.name}</strong><br>${team.name}<br><span style="opacity:0.7">${stadium.city}</span>`, {
       direction: 'top',
@@ -2683,8 +2714,11 @@ function renderStadiumMap() {
     });
 
     marker.on('click', () => onStadiumClick(teamId));
+    cluster.addLayer(marker);
     stadiumMarkers[teamId] = marker;
   }
+
+  stadiumMap.addLayer(cluster);
 }
 
 async function onStadiumClick(teamId) {
