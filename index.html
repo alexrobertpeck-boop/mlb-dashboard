@@ -567,12 +567,27 @@
     text-transform: uppercase;
     letter-spacing: 0.5px;
     white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .injury-status .info-icon { background: #b3261e; color: white; }
+  .injury-status .info-icon:hover { background: #6a1612; }
+  .injury-days-cell {
+    text-align: right;
+    white-space: nowrap;
   }
   .injury-days {
+    display: block;
     color: #555;
     font-size: 0.85em;
-    white-space: nowrap;
     font-weight: 600;
+  }
+  .injury-eligible {
+    display: block;
+    color: #888;
+    font-size: 0.78em;
+    margin-top: 1px;
   }
   @media (max-width: 600px) {
     .injury-row {
@@ -2035,37 +2050,63 @@ async function loadInjuries() {
   }
 
   function parseReason(desc) {
-    // "...on the 15-day injured list. Tommy John surgery." → "Tommy John surgery"
     const parts = desc.split('. ');
     if (parts.length < 2) return '';
     return parts.slice(1).join('. ').replace(/\.\s*$/, '');
   }
 
   function shortStatus(desc) {
-    // "Injured 60-Day" → "60-Day IL"
     return desc.replace(/^Injured\s+/, '') + ' IL';
+  }
+
+  // Tooltip explanations of each IL type — same info-icon pattern as the advanced-stat cards
+  const IL_INFO = {
+    '10-Day IL': '10-Day IL: minimum 10 days off the active roster. Used for position players with shorter-term injuries. The number is a minimum stay, not an expected return.',
+    '15-Day IL': '15-Day IL: minimum 15 days off. Used for pitchers and two-way players with short-to-medium injuries.',
+    '60-Day IL': '60-Day IL: minimum 60 days off. Reserved for serious injuries — also used strategically because it frees a 40-man roster spot. Players often miss longer than 60 days.',
+    '7-Day IL': '7-Day IL: 7-day minimum, specifically for concussion injuries.',
+  };
+
+  function eligibleDate(placementDateStr, statusDesc) {
+    const min = parseInt(statusDesc.match(/(\d+)/)?.[1] ?? 0, 10);
+    if (!min) return '';
+    const d = new Date(placementDateStr + 'T12:00:00');
+    d.setDate(d.getDate() + min);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   }
 
   const rows = injured.map(p => {
     const photo = playerPhotoUrl(p.person.id);
     const il = ilByPlayer.get(p.person.id);
-    let daysHtml = '';
+    const status = shortStatus(p.status.description);
+
+    let metaHtml = '';
     let reasonHtml = '';
     if (il) {
       const start = new Date(il.date + 'T12:00:00');
       const days = Math.max(0, Math.floor((Date.now() - start.getTime()) / 86400000));
-      daysHtml = `<span class="injury-days">${days} day${days === 1 ? '' : 's'}</span>`;
+      const eligible = eligibleDate(il.date, status);
+      metaHtml = `<div class="injury-days-cell">
+        <span class="injury-days">${days} day${days === 1 ? '' : 's'}</span>
+        ${eligible ? `<span class="injury-eligible">Eligible ${eligible}</span>` : ''}
+      </div>`;
       const reason = parseReason(il.description);
       if (reason) reasonHtml = `<div class="injury-reason">${reason}</div>`;
+    } else {
+      metaHtml = `<div class="injury-days-cell"></div>`;
     }
+
+    const ilInfo = IL_INFO[status];
+    const statusInfoIcon = ilInfo ? infoIconHtml(ilInfo) : '';
+
     return `<div class="injury-row">
       <img class="injury-photo" src="${photo}" alt="${p.person.fullName}" onerror="this.style.visibility='hidden'">
       <div>
         <div class="injury-name">${p.person.fullName}<span class="injury-position">${p.position?.abbreviation || ''}</span></div>
         ${reasonHtml}
       </div>
-      <span class="injury-status">${shortStatus(p.status.description)}</span>
-      ${daysHtml}
+      <span class="injury-status">${status}${statusInfoIcon}</span>
+      ${metaHtml}
     </div>`;
   }).join('');
 
