@@ -1632,9 +1632,15 @@ async function loadSchedule() {
 
 /* ─── Season heatmap ─── */
 
+function lastDayOfCurrentMonth() {
+  const today = new Date();
+  const d = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 async function fetchSeasonSchedule() {
   const season = new Date().getFullYear();
-  const url = `${API_BASE}/schedule?sportId=1&teamId=${currentTeamId}&startDate=${season}-03-15&endDate=${season}-10-15`;
+  const url = `${API_BASE}/schedule?sportId=1&teamId=${currentTeamId}&startDate=${season}-03-15&endDate=${lastDayOfCurrentMonth()}`;
   const data = await fetchJSON(url);
   return data.dates.flatMap(d => d.games.map(g => ({ ...g, _date: d.date })));
 }
@@ -1690,7 +1696,9 @@ function dayTooltip(dateKey, games) {
 function renderHeatmap(games) {
   const season = new Date().getFullYear();
   const start = new Date(`${season}-03-15T12:00:00`);
-  const end   = new Date(`${season}-10-15T12:00:00`);
+  const today = new Date();
+  // End at the last day of the current month — no point showing empty future months
+  const end = new Date(today.getFullYear(), today.getMonth() + 1, 0, 12, 0, 0);
   const todayKey = isoDate(0);
 
   // Group games by date key
@@ -1701,18 +1709,16 @@ function renderHeatmap(games) {
     gamesByDate[key].push(g);
   }
 
-  // Build a flat list of cells and figure out columns
   const cells = [];
-  const monthLabels = []; // [{ col, label }]
-  const startDow = start.getDay(); // 0=Sun, 6=Sat
-  const startCol = 1; // first column
-  let lastMonth = -1;
+  const monthFirstCol = new Map();
+  const startDow = start.getDay();
+  let totalDayCount = 0;
 
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     const dayIndex = Math.floor((d - start) / 86400000);
     const totalDays = startDow + dayIndex;
-    const col = startCol + Math.floor(totalDays / 7);
-    const row = (totalDays % 7) + 2; // +2 because row 1 is reserved for month labels
+    const col = Math.floor(totalDays / 7) + 1;
+    const row = (totalDays % 7) + 2;
 
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const dayGames = gamesByDate[key] || [];
@@ -1722,19 +1728,28 @@ function renderHeatmap(games) {
     if (cls) classes.push(cls);
     if (key === todayKey) classes.push('today');
 
-    cells.push(`<div class="${classes.join(' ')}" style="grid-column: ${col}; grid-row: ${row};" title="${tooltip}"></div>`);
+    cells.push(`<div class="${classes.join(' ')}" style="grid-column-start: ${col}; grid-row-start: ${row};" title="${tooltip}"></div>`);
 
-    // Month labels appear in the first week of each month
-    const m = d.getMonth();
-    if (m !== lastMonth && d.getDate() <= 7) {
-      const monthName = d.toLocaleDateString(undefined, { month: 'short' });
-      monthLabels.push(`<div class="heatmap-month" style="grid-column: ${col} / span 4;">${monthName}</div>`);
-      lastMonth = m;
+    const monthKey = `${d.getFullYear()}-${d.getMonth()}`;
+    if (!monthFirstCol.has(monthKey)) {
+      monthFirstCol.set(monthKey, {
+        col,
+        name: d.toLocaleDateString(undefined, { month: 'short' }),
+      });
     }
+    totalDayCount++;
   }
 
-  // Summary: W-L record + counts of other states
-  const finished = games.filter(g => classifyGame(g).kind === 'win' || classifyGame(g).kind === 'loss');
+  const numColumns = Math.ceil((startDow + totalDayCount) / 7);
+
+  const monthLabels = [...monthFirstCol.values()].map(m =>
+    `<div class="heatmap-month" style="grid-column-start: ${m.col};">${m.name}</div>`
+  );
+
+  const finished = games.filter(g => {
+    const k = classifyGame(g).kind;
+    return k === 'win' || k === 'loss';
+  });
   const wins = finished.filter(g => classifyGame(g).kind === 'win').length;
   const losses = finished.length - wins;
 
@@ -1744,7 +1759,9 @@ function renderHeatmap(games) {
     <div class="heatmap-wrap">
       <div class="heatmap-summary"><strong>${wins}–${losses}</strong> through ${finished.length} games</div>
       <div class="heatmap-scroll">
-        <div class="heatmap-grid">${monthLabels.join('')}${cells.join('')}</div>
+        <div class="heatmap-grid" style="grid-template-columns: repeat(${numColumns}, 14px);">
+          ${monthLabels.join('')}${cells.join('')}
+        </div>
       </div>
       <div class="heatmap-legend">
         <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#1a7a3a"></span>Win</span>
