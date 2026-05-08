@@ -1238,6 +1238,165 @@
   }
   .utility-link:hover { background: rgba(255,255,255,0.12); }
 
+  /* ─── Games log ─── */
+  .games-add-btn {
+    width: auto;
+    padding: 10px 18px;
+    margin: 0 0 16px;
+    font-size: 0.85em;
+  }
+  .games-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .game-row {
+    display: grid;
+    grid-template-columns: 110px 1fr auto;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    background: #fafafa;
+    border: 1px solid #ececec;
+    border-radius: 8px;
+  }
+  .game-row-date {
+    font-size: 0.78em;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 700;
+  }
+  .game-row-matchup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .game-row-logo {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  .game-row-team { font-weight: 600; font-size: 0.92em; }
+  .game-row-vs { color: #999; font-size: 0.85em; margin: 0 2px; }
+  .game-score {
+    font-weight: 800;
+    font-size: 1.05em;
+    letter-spacing: 0.5px;
+    color: #444;
+    white-space: nowrap;
+  }
+  .game-score-winner { color: #1a7a3a; }
+  .game-row-notes {
+    grid-column: 2 / -1;
+    font-size: 0.85em;
+    color: #555;
+    font-style: italic;
+    margin-top: 4px;
+  }
+  @media (max-width: 600px) {
+    .game-row {
+      grid-template-columns: 1fr;
+      gap: 6px;
+    }
+    .game-row-notes { grid-column: 1; }
+  }
+
+  /* Add-game modal */
+  .add-game-modal-content { max-width: 520px; }
+  #game-options-section {
+    border: 1px solid #ececec;
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 14px;
+    background: #fafafa;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .game-options-label {
+    font-size: 0.75em;
+    text-transform: uppercase;
+    color: #666;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 4px 6px 8px;
+  }
+  .game-options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .game-option {
+    background: white;
+    border: 1px solid #e5e5e5;
+    border-radius: 6px;
+    padding: 8px 10px;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    transition: border-color 0.1s ease;
+  }
+  .game-option:hover { border-color: var(--team-primary); }
+  .game-option.selected {
+    border-color: var(--team-primary);
+    background: rgba(var(--team-primary-rgb), 0.08);
+  }
+  .game-option-teams {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9em;
+  }
+  .game-option-meta {
+    display: block;
+    font-size: 0.78em;
+    color: #666;
+    margin-top: 2px;
+  }
+  .game-options-empty {
+    padding: 10px;
+    color: #888;
+    font-size: 0.85em;
+    font-style: italic;
+    text-align: center;
+  }
+  .game-score-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .auth-form select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 16px;
+    font-family: inherit;
+    background: white;
+  }
+  .auth-form select:focus {
+    outline: none;
+    border-color: var(--team-primary);
+    box-shadow: 0 0 0 3px rgba(var(--team-primary-rgb), 0.15);
+  }
+  .auth-form textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 16px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 50px;
+  }
+  .auth-form textarea:focus {
+    outline: none;
+    border-color: var(--team-primary);
+    box-shadow: 0 0 0 3px rgba(var(--team-primary-rgb), 0.15);
+  }
+
   /* ─── Mobile tweaks ─── */
   @media (max-width: 600px) {
     body { padding: 12px; }
@@ -1356,6 +1515,12 @@
       <p class="attendance-hint">Click a stadium to mark it as visited. Click again to remove.</p>
       <div id="stadium-map"></div>
     </section>
+
+    <section>
+      <h2>Games Logged</h2>
+      <button class="auth-submit games-add-btn" id="add-game-btn">+ Log a Game</button>
+      <div class="games-list" id="games-list"></div>
+    </section>
   </div>
 
   <div id="team-view">
@@ -1445,6 +1610,44 @@
       <span id="auth-toggle-text">Don't have an account?</span>
       <button type="button" id="auth-toggle-btn">Sign up</button>
     </div>
+  </div>
+</div>
+
+<div class="auth-modal" id="add-game-modal" hidden>
+  <div class="auth-modal-backdrop"></div>
+  <div class="auth-modal-content add-game-modal-content">
+    <button class="auth-modal-close" id="add-game-modal-close" aria-label="Close">×</button>
+    <h2>Log a Game</h2>
+    <form class="auth-form" id="add-game-form">
+      <label for="game-date">Date</label>
+      <input type="date" id="game-date" required>
+
+      <div id="game-options-section" hidden>
+        <div class="game-options-label">Pick the game you attended</div>
+        <div class="game-options-list" id="game-options-list"></div>
+      </div>
+
+      <label for="game-home-team">Home Team</label>
+      <select id="game-home-team" required></select>
+
+      <label for="game-away-team">Away Team</label>
+      <select id="game-away-team" required></select>
+
+      <div class="game-score-row">
+        <label for="game-away-score" style="margin-bottom:0;">Away Score (optional)
+          <input type="number" id="game-away-score" min="0" inputmode="numeric">
+        </label>
+        <label for="game-home-score" style="margin-bottom:0;">Home Score (optional)
+          <input type="number" id="game-home-score" min="0" inputmode="numeric">
+        </label>
+      </div>
+
+      <label for="game-notes">Notes (optional)</label>
+      <textarea id="game-notes" rows="2" placeholder="Memorable plays, who you went with, etc."></textarea>
+
+      <div class="auth-message" id="game-message" hidden></div>
+      <button type="submit" class="auth-submit" id="game-save-btn">Save Game</button>
+    </form>
   </div>
 </div>
 
@@ -2770,41 +2973,262 @@ async function onStadiumClick(teamId) {
   renderAttendanceStats();
 }
 
+let attendedGames = [];
+
 function renderAttendanceStats() {
-  const stadiumCount = visitedStadiums.size;
-  // For now teams seen = stadiums visited (each stadium = its home team).
-  // In 4b we'll fold in away teams from the games log.
-  const teamsSeen = visitedStadiums.size;
+  // Stadiums visited = explicit "I've been here" entries ∪ home-stadiums of logged games
+  const stadiumsSeen = new Set(visitedStadiums);
+  for (const g of attendedGames) stadiumsSeen.add(g.home_team_id);
+
+  // Teams seen = home teams of stadiums ∪ both teams of logged games
+  const teamsSeen = new Set(visitedStadiums);
+  for (const g of attendedGames) {
+    teamsSeen.add(g.home_team_id);
+    teamsSeen.add(g.away_team_id);
+  }
 
   document.getElementById('attendance-stats').classList.remove('loading');
   document.getElementById('attendance-stats').innerHTML = `
     <div class="attendance-stats">
       <div class="attendance-stat">
         <div class="attendance-stat-label">Stadiums Visited</div>
-        <div class="attendance-stat-value">${stadiumCount}<span class="denom"> / 30</span></div>
+        <div class="attendance-stat-value">${stadiumsSeen.size}<span class="denom"> / 30</span></div>
       </div>
       <div class="attendance-stat">
         <div class="attendance-stat-label">Teams Seen</div>
-        <div class="attendance-stat-value">${teamsSeen}<span class="denom"> / 30</span></div>
+        <div class="attendance-stat-value">${teamsSeen.size}<span class="denom"> / 30</span></div>
       </div>
       <div class="attendance-stat">
         <div class="attendance-stat-label">Games Logged</div>
-        <div class="attendance-stat-value">0<span class="denom"> (coming soon)</span></div>
+        <div class="attendance-stat-value">${attendedGames.length}</div>
       </div>
     </div>
   `;
 }
 
 async function loadAttendance() {
-  const { data, error } = await sb.from('attended_stadiums').select('team_id');
-  if (error) {
-    console.error('Load attended stadiums failed:', error);
-    visitedStadiums = new Set();
-  } else {
-    visitedStadiums = new Set(data.map(r => r.team_id));
-  }
+  // Stadiums + games loaded in parallel; both feed the stats panel.
+  const [stadiumsRes, gamesRes] = await Promise.all([
+    sb.from('attended_stadiums').select('team_id'),
+    sb.from('attended_games').select('*').order('game_date', { ascending: false }),
+  ]);
+  if (stadiumsRes.error) { console.error('Stadiums load failed:', stadiumsRes.error); visitedStadiums = new Set(); }
+  else { visitedStadiums = new Set(stadiumsRes.data.map(r => r.team_id)); }
+  if (gamesRes.error) { console.error('Games load failed:', gamesRes.error); attendedGames = []; }
+  else { attendedGames = gamesRes.data || []; }
+
   renderAttendanceStats();
   renderStadiumMap();
+  renderGamesList();
+  wireAddGameModal();
+}
+
+/* ─── Games log ─── */
+
+function renderGamesList() {
+  const el = document.getElementById('games-list');
+  if (!el) return;
+  if (attendedGames.length === 0) {
+    el.innerHTML = '<div class="empty-note">No games logged yet. Click "+ Log a Game" above to add one.</div>';
+    return;
+  }
+  el.innerHTML = attendedGames.map(g => {
+    const date = new Date(g.game_date + 'T12:00:00').toLocaleDateString(undefined, {
+      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+    });
+    const home = TEAMS[g.home_team_id];
+    const away = TEAMS[g.away_team_id];
+    const homeLogo = `https://www.mlbstatic.com/team-logos/${g.home_team_id}.svg`;
+    const awayLogo = `https://www.mlbstatic.com/team-logos/${g.away_team_id}.svg`;
+
+    let scoreHtml = '';
+    if (g.home_score !== null && g.away_score !== null && g.home_score !== undefined) {
+      const homeWon = g.home_score > g.away_score;
+      scoreHtml = `<span class="game-score">
+        <span class="${!homeWon ? 'game-score-winner' : ''}">${g.away_score}</span>
+        <span style="opacity:0.5">–</span>
+        <span class="${homeWon ? 'game-score-winner' : ''}">${g.home_score}</span>
+      </span>`;
+    }
+
+    const notesHtml = g.notes ? `<div class="game-row-notes">${g.notes}</div>` : '';
+
+    return `<div class="game-row">
+      <div class="game-row-date">${date}</div>
+      <div class="game-row-matchup">
+        <img src="${awayLogo}" alt="${away?.abbr || ''}" class="game-row-logo" onerror="this.style.visibility='hidden'">
+        <span class="game-row-team">${away?.short || '?'}</span>
+        <span class="game-row-vs">@</span>
+        <img src="${homeLogo}" alt="${home?.abbr || ''}" class="game-row-logo" onerror="this.style.visibility='hidden'">
+        <span class="game-row-team">${home?.short || '?'}</span>
+      </div>
+      ${scoreHtml}
+      ${notesHtml}
+    </div>`;
+  }).join('');
+}
+
+function populateTeamDropdown(selectEl) {
+  const sorted = Object.entries(TEAMS).sort((a, b) => a[1].name.localeCompare(b[1].name));
+  selectEl.innerHTML =
+    '<option value="">— Select —</option>' +
+    sorted.map(([id, t]) => `<option value="${id}">${t.name}</option>`).join('');
+}
+
+async function fetchGamesOnDate(dateStr) {
+  const url = `${API_BASE}/schedule?sportId=1&date=${dateStr}&hydrate=team(venue)`;
+  const data = await fetchJSON(url);
+  return data.dates?.[0]?.games || [];
+}
+
+function renderGameOptions(games) {
+  const section = document.getElementById('game-options-section');
+  const list = document.getElementById('game-options-list');
+  if (games.length === 0) {
+    section.hidden = false;
+    list.innerHTML = `<div class="game-options-empty">No MLB games found for that date — fill in manually below.</div>`;
+    return;
+  }
+  section.hidden = false;
+  list.innerHTML = games.map(g => {
+    const home = g.teams.home.team;
+    const away = g.teams.away.team;
+    const homeScore = g.teams.home.score;
+    const awayScore = g.teams.away.score;
+    const venue = g.venue?.name || home.name;
+    const haveScore = homeScore !== undefined && awayScore !== undefined;
+    const time = new Date(g.gameDate).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    const tail = haveScore ? `${away.abbreviation || ''} ${awayScore} — ${homeScore} ${home.abbreviation || ''}` : time;
+    return `<button type="button" class="game-option"
+        data-game-pk="${g.gamePk}"
+        data-home-id="${home.id}" data-away-id="${away.id}"
+        data-home-score="${homeScore ?? ''}" data-away-score="${awayScore ?? ''}">
+      <span class="game-option-teams">${away.name} @ ${home.name}</span>
+      <span class="game-option-meta">${venue} · ${tail}</span>
+    </button>`;
+  }).join('');
+  list.querySelectorAll('.game-option').forEach(btn => {
+    btn.addEventListener('click', () => selectGameOption(btn));
+  });
+}
+
+function selectGameOption(btn) {
+  document.getElementById('game-home-team').value = btn.dataset.homeId;
+  document.getElementById('game-away-team').value = btn.dataset.awayId;
+  document.getElementById('game-home-score').value = btn.dataset.homeScore || '';
+  document.getElementById('game-away-score').value = btn.dataset.awayScore || '';
+  document.getElementById('add-game-form').dataset.gamePk = btn.dataset.gamePk || '';
+  document.querySelectorAll('.game-option').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function setGameMessage(text, type = 'error') {
+  const el = document.getElementById('game-message');
+  if (!text) { el.hidden = true; return; }
+  el.textContent = text;
+  el.className = `auth-message ${type}`;
+  el.hidden = false;
+}
+
+function openAddGameModal() {
+  populateTeamDropdown(document.getElementById('game-home-team'));
+  populateTeamDropdown(document.getElementById('game-away-team'));
+  document.getElementById('game-date').value = isoDate(0);
+  document.getElementById('game-home-score').value = '';
+  document.getElementById('game-away-score').value = '';
+  document.getElementById('game-notes').value = '';
+  document.getElementById('add-game-form').dataset.gamePk = '';
+  document.getElementById('game-options-section').hidden = true;
+  setGameMessage(null);
+  document.getElementById('add-game-modal').hidden = false;
+  // Auto-fetch games for today on open
+  triggerDateGames();
+}
+
+function closeAddGameModal() {
+  document.getElementById('add-game-modal').hidden = true;
+}
+
+async function triggerDateGames() {
+  const date = document.getElementById('game-date').value;
+  if (!date) return;
+  const list = document.getElementById('game-options-list');
+  list.innerHTML = `<div class="game-options-empty">Loading games…</div>`;
+  document.getElementById('game-options-section').hidden = false;
+  try {
+    const games = await fetchGamesOnDate(date);
+    renderGameOptions(games);
+  } catch (e) {
+    list.innerHTML = `<div class="game-options-empty">Couldn't load games — fill in manually below.</div>`;
+  }
+}
+
+async function handleSaveGame(e) {
+  e.preventDefault();
+  const date = document.getElementById('game-date').value;
+  const homeTeamId = parseInt(document.getElementById('game-home-team').value, 10);
+  const awayTeamId = parseInt(document.getElementById('game-away-team').value, 10);
+  const homeScore = document.getElementById('game-home-score').value;
+  const awayScore = document.getElementById('game-away-score').value;
+  const notes = document.getElementById('game-notes').value.trim() || null;
+  const gamePkStr = document.getElementById('add-game-form').dataset.gamePk;
+
+  if (!date || !homeTeamId || !awayTeamId) {
+    setGameMessage('Pick a date and both teams.', 'error');
+    return;
+  }
+  if (homeTeamId === awayTeamId) {
+    setGameMessage('Home and away teams must differ.', 'error');
+    return;
+  }
+
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) { setGameMessage('Not logged in.', 'error'); return; }
+
+  const saveBtn = document.getElementById('game-save-btn');
+  saveBtn.disabled = true;
+  setGameMessage('Saving…', 'info');
+
+  const row = {
+    user_id: user.id,
+    game_pk: gamePkStr ? parseInt(gamePkStr, 10) : null,
+    game_date: date,
+    home_team_id: homeTeamId,
+    away_team_id: awayTeamId,
+    home_score: homeScore !== '' ? parseInt(homeScore, 10) : null,
+    away_score: awayScore !== '' ? parseInt(awayScore, 10) : null,
+    notes,
+  };
+
+  const { error } = await sb.from('attended_games').insert(row);
+  saveBtn.disabled = false;
+  if (error) {
+    setGameMessage(`Couldn't save: ${error.message}`, 'error');
+    return;
+  }
+  setGameMessage('Saved!', 'info');
+  setTimeout(async () => {
+    closeAddGameModal();
+    // Reload the games + stats
+    const { data } = await sb.from('attended_games').select('*').order('game_date', { ascending: false });
+    attendedGames = data || [];
+    renderGamesList();
+    renderAttendanceStats();
+  }, 600);
+}
+
+let addGameModalWired = false;
+function wireAddGameModal() {
+  if (addGameModalWired) return;
+  addGameModalWired = true;
+  document.getElementById('add-game-btn').addEventListener('click', openAddGameModal);
+  document.querySelector('#add-game-modal .auth-modal-backdrop').addEventListener('click', closeAddGameModal);
+  document.getElementById('add-game-modal-close').addEventListener('click', closeAddGameModal);
+  document.getElementById('game-date').addEventListener('change', triggerDateGames);
+  document.getElementById('add-game-form').addEventListener('submit', handleSaveGame);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('add-game-modal').hidden) closeAddGameModal();
+  });
 }
 
 /* ─── Init ─── */
