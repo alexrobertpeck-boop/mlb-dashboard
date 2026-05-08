@@ -2719,9 +2719,12 @@ function renderStadiumMap() {
 // where the marker should DRAW. The leader line connects display → actual.
 // Tuned per-pair for visual harmony rather than computed automatically.
 const STADIUM_OFFSETS = {
-  // LA basin: LAA pushed E (avoid SD which is south); LAD pushed N (mountains)
+  // LA basin: LAD pushed N (mountains); LAA pushed NE (away from SD and LAD)
   119: { dlat:  2.0, dlng: -1.0 },  // LAD: N (toward mountains)
-  108: { dlat: -1.0, dlng:  2.2 },  // LAA: E (toward desert/AZ, away from SD)
+  108: { dlat:  1.5, dlng:  1.5 },  // LAA: NE (Mojave / Inland Empire — clears SD and LAD)
+
+  // BOS: pushed NE so it has clearance from the offset Mets to its SW
+  111: { dlat:  1.0, dlng:  1.5 },  // BOS: NE (toward Maine coast)
 
   // East Coast quintet: NYY, NYM, PHI, BAL, WSH all crowd each other.
   // Fan them out radially: NYY=N, NYM=NE, PHI=SE (offshore), BAL=NW, WSH=SW.
