@@ -67,16 +67,30 @@
     min-width: 0;
   }
   .utility-left { flex: 1; }
-  .return-link {
-    color: rgba(255,255,255,0.92);
+  /* All four utility-bar actions share the same font + sizing for visual consistency. */
+  .return-link, .utility-link, .my-teams-btn, .auth-logout-btn {
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 0.72em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: white;
     text-decoration: none;
-    font-weight: 600;
-    font-size: 0.82em;
-    padding: 4px 10px;
-    border-radius: 6px;
-    transition: background 0.15s ease;
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s ease, border-color 0.15s ease;
   }
-  .return-link:hover { background: rgba(255,255,255,0.12); }
+  .return-link:hover, .utility-link:hover,
+  .my-teams-btn:hover, .auth-logout-btn:hover {
+    background: rgba(255,255,255,0.3);
+    border-color: rgba(255,255,255,0.6);
+  }
 
   .team-header {
     display: flex;
@@ -594,7 +608,6 @@
     height: 56px;
     border-radius: 50%;
     object-fit: cover;
-    object-position: top; /* show top of headshot so caps aren't clipped */
     background: #fff;
     border: 2px solid var(--team-accent);
     flex-shrink: 0;
@@ -655,16 +668,7 @@
     color: rgba(255,255,255,0.9);
   }
   .auth-email { font-weight: 600; }
-  .auth-logout-btn {
-    background: transparent;
-    border: 1px solid rgba(255,255,255,0.35);
-    border-radius: 999px;
-    padding: 4px 10px;
-    color: white;
-    font-size: 0.85em;
-    cursor: pointer;
-  }
-  .auth-logout-btn:hover { background: rgba(255,255,255,0.15); }
+  /* .auth-logout-btn shares the unified utility-bar style at the top of the stylesheet */
 
   /* ─── Auth modal ─── */
   .auth-modal {
@@ -814,23 +818,7 @@
   }
 
   /* ─── My Teams button + manager ─── */
-  .my-teams-btn {
-    background: rgba(255,255,255,0.18);
-    border: 1px solid rgba(255,255,255,0.4);
-    border-radius: 999px;
-    padding: 5px 12px;
-    font-size: 0.68em;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: white;
-    cursor: pointer;
-    font-family: inherit;
-  }
-  .my-teams-btn:hover {
-    background: rgba(255,255,255,0.3);
-    border-color: rgba(255,255,255,0.6);
-  }
+  /* .my-teams-btn shares the unified utility-bar style at the top of the stylesheet */
   .my-teams-count {
     margin-left: 4px;
     opacity: 0.85;
@@ -1235,26 +1223,7 @@
     box-shadow: 0 2px 8px rgba(26,122,58,0.35);
   }
 
-  /* Utility-bar nav link (Stadiums pill, matches My Teams pill style) */
-  .utility-link {
-    background: rgba(255,255,255,0.18);
-    border: 1px solid rgba(255,255,255,0.4);
-    border-radius: 999px;
-    padding: 5px 12px;
-    font-size: 0.68em;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    color: white;
-    text-decoration: none;
-    cursor: pointer;
-    font-family: inherit;
-    transition: background 0.15s ease, border-color 0.15s ease;
-  }
-  .utility-link:hover {
-    background: rgba(255,255,255,0.3);
-    border-color: rgba(255,255,255,0.6);
-  }
+  /* .utility-link (Stadiums pill) shares the unified utility-bar style at the top of the stylesheet */
 
   /* Hide the Switch Team picker when logged in — saved-team users navigate via Home Plate */
   body.logged-in main[data-view="team"] .header-chevron { display: none; }
@@ -1426,16 +1395,11 @@
     header { border-radius: 12px 12px 0 0; }
     .utility-bar { padding: 8px 14px; min-height: 0; }
     .utility-left, .utility-right { gap: 6px; }
-    .return-link { font-size: 1em; padding: 6px 10px; }
-    .return-label { display: none; }
-    .auth-email {
-      max-width: 110px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+    .return-link, .utility-link, .my-teams-btn, .auth-logout-btn {
+      padding: 5px 10px;
+      font-size: 0.66em;
     }
-    .my-teams-btn { padding: 4px 8px; }
-    .auth-logout-btn { padding: 3px 8px; font-size: 0.78em; }
+    .return-label { display: none; }
     .team-header { padding: 16px; gap: 14px; }
     .header-logo { width: 56px; height: 56px; }
     header h1 { font-size: 1.4em; }
@@ -2211,7 +2175,9 @@ function formatStatValue(val, format) {
 }
 
 function playerPhotoUrl(playerId) {
-  return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_120,q_auto:best/v1/people/${playerId}/headshot/67/current`;
+  // c_thumb + g_face → face-centered square thumbnail. Avoids hat/chin clipping
+  // we'd otherwise need to fix with object-position guesswork.
+  return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_120,h_120,c_thumb,g_face,q_auto:best/v1/people/${playerId}/headshot/67/current`;
 }
 
 function infoIconHtml(info) {
