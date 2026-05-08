@@ -946,7 +946,8 @@
     header { border-radius: 12px 12px 0 0; }
     .utility-bar { padding: 8px 14px; min-height: 0; }
     .utility-left, .utility-right { gap: 6px; }
-    .return-link { font-size: 0.78em; padding: 4px 6px; }
+    .return-link { font-size: 1em; padding: 6px 10px; }
+    .return-label { display: none; }
     .auth-email {
       max-width: 110px;
       overflow: hidden;
@@ -988,7 +989,10 @@
   <header>
     <div class="utility-bar">
       <div class="utility-left">
-        <a href="/" class="return-link" id="return-link" hidden>← Return to Dashboard</a>
+        <a href="/" class="return-link" id="return-link" hidden aria-label="Return to Dashboard">
+          <span aria-hidden="true">←</span>
+          <span class="return-label">Return to Dashboard</span>
+        </a>
       </div>
       <div class="utility-right">
         <div class="auth-area" id="auth-area"></div>
