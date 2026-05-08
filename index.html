@@ -2683,16 +2683,16 @@ function renderStadiumMap() {
     // so clicks pass through to whatever's underneath.
     if (offset) {
       L.polyline([[displayLat, displayLng], [stadium.lat, stadium.lng]], {
-        color: '#999',
-        weight: 1.5,
-        opacity: 0.7,
+        color: '#555',
+        weight: 2,
+        opacity: 0.85,
         interactive: false,
       }).addTo(stadiumMap);
 
       L.circleMarker([stadium.lat, stadium.lng], {
-        radius: 3,
-        color: '#999',
-        fillColor: '#999',
+        radius: 4,
+        color: '#555',
+        fillColor: '#555',
         fillOpacity: 1,
         weight: 1,
         interactive: false,
@@ -2719,8 +2719,8 @@ function renderStadiumMap() {
 // teamId → { lat, lng } where the marker should DISPLAY (the actual stadium
 // location stays as the polyline endpoint).
 function computeStadiumOffsets() {
-  const NEARBY_DEG = 1.0;     // group threshold
-  const OFFSET_DEG = 1.4;     // how far to push markers from group center
+  const NEARBY_DEG = 1.5;     // group threshold (lat/lng distance to be "nearby")
+  const OFFSET_DEG = 3.0;     // how far to push markers from group center
   const ids = Object.keys(STADIUMS).map(s => parseInt(s, 10));
   const grouped = new Set();
   const groups = [];
