@@ -13,7 +13,7 @@ export default async (req) => {
     return jsonError(400, 'Missing or invalid `team` parameter.');
   }
 
-  const apiKey = Netlify.env.get('ANTHROPIC_API_KEY');
+  const apiKey = Netlify.env.get('ANTHROPIC_API_KEY') || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return jsonError(500, 'AI summary is not configured (ANTHROPIC_API_KEY missing on the server).');
   }
@@ -41,9 +41,8 @@ export default async (req) => {
 
     if (!claudeRes.ok) {
       const errText = await claudeRes.text();
-      const keyDiag = `key.length=${apiKey.length} key.prefix=${apiKey.slice(0,8)}…`;
-      console.error('Claude error:', claudeRes.status, errText, keyDiag);
-      return jsonError(502, `Claude API ${claudeRes.status}: ${errText.slice(0, 300)} | ${keyDiag}`);
+      console.error('Claude error:', claudeRes.status, errText);
+      return jsonError(502, 'AI service returned an error. Check function logs for details.');
     }
 
     const claudeData = await claudeRes.json();
