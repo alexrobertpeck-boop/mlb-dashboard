@@ -882,6 +882,70 @@
     .teams-grid { grid-template-columns: 1fr; }
   }
 
+  /* ─── Season heatmap ─── */
+  .heatmap-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .heatmap-scroll {
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .heatmap-grid {
+    display: grid;
+    grid-template-rows: 12px repeat(7, 14px);
+    grid-auto-columns: 14px;
+    gap: 3px;
+    min-width: max-content;
+  }
+  .heatmap-month {
+    grid-row: 1;
+    font-size: 0.7em;
+    color: #888;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    align-self: end;
+    padding-bottom: 2px;
+  }
+  .heatmap-cell {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    background: #ebedf0;
+    cursor: default;
+  }
+  .heatmap-cell.win { background: #1a7a3a; }
+  .heatmap-cell.loss { background: #b3261e; }
+  .heatmap-cell.split { background: #c2873d; }
+  .heatmap-cell.scheduled { background: #d4d4d8; }
+  .heatmap-cell.other { background: #999; }
+  .heatmap-cell.today {
+    outline: 2px solid var(--team-primary);
+    outline-offset: 1px;
+  }
+  .heatmap-legend {
+    display: flex;
+    gap: 14px;
+    font-size: 0.78em;
+    color: #666;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .heatmap-legend-item { display: flex; align-items: center; gap: 6px; }
+  .heatmap-legend-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    background: #ebedf0;
+  }
+  .heatmap-summary {
+    font-size: 0.85em;
+    color: #555;
+  }
+  .heatmap-summary strong { color: #222; }
+
   /* ─── Around MLB overview cards ─── */
   .overview-row {
     display: grid;
@@ -1191,6 +1255,11 @@
     <div class="calendar-wrap">
       <div id="calendar" class="loading">Loading…</div>
     </div>
+  </section>
+
+  <section>
+    <h2>Season Heatmap</h2>
+    <div id="heatmap" class="loading">Loading…</div>
   </section>
 
   <section>
@@ -1559,6 +1628,139 @@ async function loadSchedule() {
   if (wrap.scrollWidth > wrap.clientWidth) {
     wrap.scrollLeft = (wrap.scrollWidth - wrap.clientWidth) / 2;
   }
+}
+
+/* ─── Season heatmap ─── */
+
+async function fetchSeasonSchedule() {
+  const season = new Date().getFullYear();
+  const url = `${API_BASE}/schedule?sportId=1&teamId=${currentTeamId}&startDate=${season}-03-15&endDate=${season}-10-15`;
+  const data = await fetchJSON(url);
+  return data.dates.flatMap(d => d.games.map(g => ({ ...g, _date: d.date })));
+}
+
+function classifyGame(g) {
+  const state = g.status.detailedState;
+  if (state === 'Final' &&
+      g.teams.home.score !== undefined &&
+      g.teams.away.score !== undefined) {
+    const isHome = g.teams.home.team.id === currentTeamId;
+    const my = isHome ? g.teams.home.score : g.teams.away.score;
+    const opp = isHome ? g.teams.away.score : g.teams.home.score;
+    return { kind: my > opp ? 'win' : 'loss', my, opp, opponent: (isHome ? g.teams.away : g.teams.home).team };
+  }
+  if (state === 'Postponed' || state === 'Cancelled' || state === 'Suspended') {
+    return { kind: 'other', state };
+  }
+  return { kind: 'scheduled', gameDate: g.gameDate };
+}
+
+function dayClass(games) {
+  if (games.length === 0) return null;
+  const results = games.map(classifyGame);
+  if (results.every(r => r.kind === 'win')) return 'win';
+  if (results.every(r => r.kind === 'loss')) return 'loss';
+  if (results.some(r => r.kind === 'win') && results.some(r => r.kind === 'loss')) return 'split';
+  if (results.some(r => r.kind === 'scheduled')) return 'scheduled';
+  return 'other';
+}
+
+function dayTooltip(dateKey, games) {
+  const dateLabel = new Date(dateKey + 'T12:00:00')
+    .toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  if (games.length === 0) return `${dateLabel} — Off day`;
+  const lines = games.map(g => {
+    const r = classifyGame(g);
+    if (r.kind === 'win' || r.kind === 'loss') {
+      const oppAbbr = TEAMS[r.opponent.id]?.abbr || '???';
+      const isHome = g.teams.home.team.id === currentTeamId;
+      return `${r.kind === 'win' ? 'W' : 'L'} ${isHome ? 'vs' : '@'} ${oppAbbr} ${r.my}–${r.opp}`;
+    }
+    if (r.kind === 'other') return r.state;
+    if (r.kind === 'scheduled') {
+      const opp = g.teams.home.team.id === currentTeamId ? g.teams.away.team : g.teams.home.team;
+      const oppAbbr = TEAMS[opp.id]?.abbr || '???';
+      return `Scheduled ${g.teams.home.team.id === currentTeamId ? 'vs' : '@'} ${oppAbbr}`;
+    }
+    return '';
+  });
+  return `${dateLabel} — ${lines.join('; ')}`;
+}
+
+function renderHeatmap(games) {
+  const season = new Date().getFullYear();
+  const start = new Date(`${season}-03-15T12:00:00`);
+  const end   = new Date(`${season}-10-15T12:00:00`);
+  const todayKey = isoDate(0);
+
+  // Group games by date key
+  const gamesByDate = {};
+  for (const g of games) {
+    const key = g._date;
+    if (!gamesByDate[key]) gamesByDate[key] = [];
+    gamesByDate[key].push(g);
+  }
+
+  // Build a flat list of cells and figure out columns
+  const cells = [];
+  const monthLabels = []; // [{ col, label }]
+  const startDow = start.getDay(); // 0=Sun, 6=Sat
+  const startCol = 1; // first column
+  let lastMonth = -1;
+
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dayIndex = Math.floor((d - start) / 86400000);
+    const totalDays = startDow + dayIndex;
+    const col = startCol + Math.floor(totalDays / 7);
+    const row = (totalDays % 7) + 2; // +2 because row 1 is reserved for month labels
+
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const dayGames = gamesByDate[key] || [];
+    const cls = dayClass(dayGames);
+    const tooltip = dayTooltip(key, dayGames);
+    const classes = ['heatmap-cell'];
+    if (cls) classes.push(cls);
+    if (key === todayKey) classes.push('today');
+
+    cells.push(`<div class="${classes.join(' ')}" style="grid-column: ${col}; grid-row: ${row};" title="${tooltip}"></div>`);
+
+    // Month labels appear in the first week of each month
+    const m = d.getMonth();
+    if (m !== lastMonth && d.getDate() <= 7) {
+      const monthName = d.toLocaleDateString(undefined, { month: 'short' });
+      monthLabels.push(`<div class="heatmap-month" style="grid-column: ${col} / span 4;">${monthName}</div>`);
+      lastMonth = m;
+    }
+  }
+
+  // Summary: W-L record + counts of other states
+  const finished = games.filter(g => classifyGame(g).kind === 'win' || classifyGame(g).kind === 'loss');
+  const wins = finished.filter(g => classifyGame(g).kind === 'win').length;
+  const losses = finished.length - wins;
+
+  const el = document.getElementById('heatmap');
+  el.classList.remove('loading');
+  el.innerHTML = `
+    <div class="heatmap-wrap">
+      <div class="heatmap-summary"><strong>${wins}–${losses}</strong> through ${finished.length} games</div>
+      <div class="heatmap-scroll">
+        <div class="heatmap-grid">${monthLabels.join('')}${cells.join('')}</div>
+      </div>
+      <div class="heatmap-legend">
+        <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#1a7a3a"></span>Win</span>
+        <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#b3261e"></span>Loss</span>
+        <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#c2873d"></span>Split DH</span>
+        <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#d4d4d8"></span>Scheduled</span>
+        <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#999"></span>PPD/CXL</span>
+        <span class="heatmap-legend-item"><span class="heatmap-legend-swatch"></span>Off day</span>
+      </div>
+    </div>
+  `;
+}
+
+async function loadHeatmap() {
+  const games = await fetchSeasonSchedule();
+  renderHeatmap(games);
 }
 
 /* ─── Stat leaders ─── */
@@ -2573,6 +2775,7 @@ async function init() {
 
   const tasks = [
     ['calendar',        loadSchedule],
+    ['heatmap',         loadHeatmap],
     ['season-hitting',  loadSeasonHitting],
     ['season-pitching', loadSeasonPitching],
     ['hot-hitting',     loadHotHitting],
