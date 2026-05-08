@@ -56,8 +56,8 @@ export default async (req) => {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=1800',
-        'Netlify-CDN-Cache-Control': 'public, max-age=1800',
+        'Cache-Control': 'public, max-age=86400',
+        'Netlify-CDN-Cache-Control': 'public, max-age=86400',
       },
     });
   } catch (err) {
