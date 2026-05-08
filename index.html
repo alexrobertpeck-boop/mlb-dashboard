@@ -2667,7 +2667,7 @@ function renderStadiumMap() {
     maxZoom: 19,
   }).addTo(stadiumMap);
 
-  const offsets = computeStadiumOffsets();
+  const offsets = STADIUM_OFFSETS;
 
   for (const [idStr, stadium] of Object.entries(STADIUMS)) {
     const teamId = parseInt(idStr, 10);
@@ -2675,8 +2675,8 @@ function renderStadiumMap() {
     if (!team) continue;
     const visited = visitedStadiums.has(teamId);
     const offset = offsets[teamId];
-    const displayLat = offset ? offset.lat : stadium.lat;
-    const displayLng = offset ? offset.lng : stadium.lng;
+    const displayLat = offset ? stadium.lat + offset.dlat : stadium.lat;
+    const displayLng = offset ? stadium.lng + offset.dlng : stadium.lng;
 
     // For offset markers, draw a leader line back to the actual stadium
     // and an anchor dot at the actual location. Lines+dots are non-interactive
@@ -2714,50 +2714,31 @@ function renderStadiumMap() {
   }
 }
 
-// For stadiums close enough to overlap visually at the default zoom, push them
-// out from their cluster's center so each logo is visible. Returns a map of
-// teamId → { lat, lng } where the marker should DISPLAY (the actual stadium
-// location stays as the polyline endpoint).
-function computeStadiumOffsets() {
-  const NEARBY_DEG = 1.5;     // group threshold (lat/lng distance to be "nearby")
-  const OFFSET_DEG = 3.0;     // how far to push markers from group center
-  const ids = Object.keys(STADIUMS).map(s => parseInt(s, 10));
-  const grouped = new Set();
-  const groups = [];
+// Hardcoded display offsets for the 5 stadium pairs that overlap visually.
+// Each value is a delta added to the stadium's actual lat/lng to determine
+// where the marker should DRAW. The leader line connects display → actual.
+// Tuned per-pair for visual harmony rather than computed automatically.
+const STADIUM_OFFSETS = {
+  // LA basin (Dodgers + Angels)
+  119: { dlat:  1.5, dlng: -1.5 },  // LAD: pushed NW
+  108: { dlat: -1.5, dlng:  1.5 },  // LAA: pushed SE
 
-  for (const id of ids) {
-    if (grouped.has(id)) continue;
-    const group = [id];
-    grouped.add(id);
-    for (const otherId of ids) {
-      if (grouped.has(otherId)) continue;
-      const b = STADIUMS[otherId];
-      const isClose = group.some(memberId => {
-        const a = STADIUMS[memberId];
-        return Math.abs(a.lat - b.lat) < NEARBY_DEG && Math.abs(a.lng - b.lng) < NEARBY_DEG;
-      });
-      if (isClose) {
-        group.push(otherId);
-        grouped.add(otherId);
-      }
-    }
-    if (group.length > 1) groups.push(group);
-  }
+  // Mid-Atlantic (Orioles + Nationals)
+  110: { dlat:  1.4, dlng:  1.4 },  // BAL: pushed NE
+  120: { dlat: -1.4, dlng: -1.4 },  // WSH: pushed SW
 
-  const offsets = {};
-  for (const group of groups) {
-    const cLat = group.reduce((s, id) => s + STADIUMS[id].lat, 0) / group.length;
-    const cLng = group.reduce((s, id) => s + STADIUMS[id].lng, 0) / group.length;
-    group.forEach((id, i) => {
-      const angle = (i * 2 * Math.PI / group.length) - Math.PI / 2; // start at top, clockwise
-      offsets[id] = {
-        lat: cLat + OFFSET_DEG * Math.cos(angle),
-        lng: cLng + OFFSET_DEG * Math.sin(angle),
-      };
-    });
-  }
-  return offsets;
-}
+  // Chicago (Cubs + White Sox)
+  112: { dlat:  1.5, dlng: -1.0 },  // CHC: pushed NW
+  145: { dlat: -1.5, dlng:  1.0 },  // CWS: pushed SE
+
+  // NYC (Yankees + Mets)
+  147: { dlat:  1.5, dlng: -1.5 },  // NYY: pushed NW (toward Hudson Valley)
+  121: { dlat: -0.5, dlng:  1.7 },  // NYM: pushed E (toward Long Island)
+
+  // Bay Area (Giants + Athletics)
+  137: { dlat: -0.7, dlng: -1.5 },  // SF: pushed SW (Pacific)
+  133: { dlat:  1.5, dlng:  1.5 },  // ATH: pushed NE (Sierras)
+};
 
 async function onStadiumClick(teamId) {
   const { data: { user } } = await sb.auth.getUser();
