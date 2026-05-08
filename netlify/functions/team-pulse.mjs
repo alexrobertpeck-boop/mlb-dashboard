@@ -42,7 +42,7 @@ export default async (req) => {
     if (!claudeRes.ok) {
       const errText = await claudeRes.text();
       console.error('Claude error:', claudeRes.status, errText);
-      return jsonError(502, 'AI service returned an error. Check function logs for details.');
+      return jsonError(502, `Claude API ${claudeRes.status}: ${errText.slice(0, 400)}`);
     }
 
     const claudeData = await claudeRes.json();
