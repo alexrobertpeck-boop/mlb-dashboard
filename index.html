@@ -883,20 +883,18 @@
   }
 
   /* ─── Season heatmap ─── */
+  /* Cells use aspect-ratio so they're always square, regardless of how wide
+     each column gets. Columns are `1fr` so the grid fills the section width;
+     as more weeks of season are added, each cell automatically shrinks. */
   .heatmap-wrap {
     display: flex;
     flex-direction: column;
     gap: 14px;
   }
-  .heatmap-scroll {
-    overflow-x: auto;
-    padding-bottom: 4px;
-  }
   .heatmap-grid {
     display: grid;
-    grid-template-rows: 18px repeat(7, 22px);
     gap: 4px;
-    min-width: max-content;
+    width: 100%;
   }
   .heatmap-month {
     grid-row: 1;
@@ -907,13 +905,14 @@
     text-transform: uppercase;
     align-self: end;
     padding-bottom: 2px;
+    overflow: hidden;
   }
   .heatmap-cell {
-    width: 22px;
-    height: 22px;
+    aspect-ratio: 1;
     border-radius: 4px;
     background: #ebedf0;
     cursor: default;
+    min-width: 0;
   }
   .heatmap-cell.win { background: #a3d4ae; }
   .heatmap-cell.loss { background: #e8a8a8; }
@@ -1762,10 +1761,8 @@ function renderHeatmap(games) {
   el.innerHTML = `
     <div class="heatmap-wrap">
       <div class="heatmap-summary"><strong>${wins}–${losses}</strong> through ${finished.length} games</div>
-      <div class="heatmap-scroll">
-        <div class="heatmap-grid" style="grid-template-columns: repeat(${numColumns}, 14px);">
-          ${monthLabels.join('')}${cells.join('')}
-        </div>
+      <div class="heatmap-grid" style="grid-template-columns: repeat(${numColumns}, 1fr);">
+        ${monthLabels.join('')}${cells.join('')}
       </div>
       <div class="heatmap-legend">
         <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background:#a3d4ae"></span>Win</span>
