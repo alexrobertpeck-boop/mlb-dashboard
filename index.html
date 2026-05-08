@@ -529,7 +529,9 @@
   .injury-list { display: flex; flex-direction: column; gap: 8px; }
   .injury-row {
     display: grid;
-    grid-template-columns: 38px 1fr auto auto;
+    /* Fixed widths for the last two columns so the IL pill and meta block
+       stay aligned across rows even when a row has no IL transaction date. */
+    grid-template-columns: 38px 1fr 110px 110px;
     align-items: center;
     gap: 12px;
     padding: 10px 14px;
