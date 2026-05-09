@@ -628,6 +628,45 @@
     }
   }
 
+  /* ─── Trade list ─── */
+  .trade-list { display: flex; flex-direction: column; gap: 8px; }
+  .trade-row {
+    display: grid;
+    grid-template-columns: 50px 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: #fafafa;
+    border: 1px solid #ececec;
+    border-left: 3px solid #888;
+    border-radius: 8px;
+  }
+  .trade-row.in  { border-left-color: #2e7d32; }
+  .trade-row.out { border-left-color: #c62828; }
+  .trade-photo {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #e0e0e0;
+  }
+  .trade-name { font-weight: 700; font-size: 0.95em; }
+  .trade-meta { font-size: 0.82em; color: #666; margin-top: 2px; }
+  .trade-direction-in  { color: #2e7d32; font-weight: 700; }
+  .trade-direction-out { color: #c62828; font-weight: 700; }
+  .trade-date {
+    font-size: 0.78em;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 700;
+  }
+  @media (max-width: 600px) {
+    .trade-row { grid-template-columns: 38px 1fr; }
+    .trade-date { grid-column: 2; justify-self: start; margin-top: 2px; }
+    .trade-photo { width: 36px; height: 36px; }
+  }
+
   /* ─── Team Pulse (AI summary) ─── */
   .team-pulse-content {
     font-size: 1em;
@@ -1966,6 +2005,15 @@
     </details>
   </section>
 
+  <section id="trades-section">
+    <details class="collapsible">
+      <summary>
+        <h2 id="trades-heading">Trades</h2>
+      </summary>
+      <div id="trades" class="loading">Loading…</div>
+    </details>
+  </section>
+
   <section>
     <h2>Standings</h2>
     <div id="standings" class="loading">Loading…</div>
@@ -2462,6 +2510,46 @@ async function loadInjuries() {
   }).join('');
 
   el.innerHTML = `<div class="injury-list">${rows}</div>`;
+}
+
+async function loadTrades() {
+  const season = new Date().getFullYear();
+  const today = isoDate(0);
+  const data = await fetchJSON(`${API_BASE}/transactions?teamId=${currentTeamId}&startDate=${season}-03-01&endDate=${today}`);
+  const trades = (data.transactions || [])
+    .filter(t => t.typeDesc === 'Trade' && t.person?.id);
+
+  trades.sort((a, b) => b.date.localeCompare(a.date));
+
+  const heading = document.getElementById('trades-heading');
+  if (heading) heading.textContent = `Trades${trades.length ? ` (${trades.length})` : ''}`;
+
+  const el = document.getElementById('trades');
+  el.classList.remove('loading');
+
+  if (!trades.length) {
+    el.innerHTML = '<div class="empty-note">No trades this season.</div>';
+    return;
+  }
+
+  const rows = trades.map(t => {
+    const incoming = t.toTeam?.id === currentTeamId;
+    const otherTeam = incoming ? t.fromTeam : t.toTeam;
+    const otherTeamName = otherTeam?.name || 'unknown team';
+    const directionLabel = incoming ? '← Acquired from' : '→ Traded to';
+    const directionClass = incoming ? 'trade-direction-in' : 'trade-direction-out';
+    const photo = playerPhotoUrl(t.person.id);
+    return `<div class="trade-row ${incoming ? 'in' : 'out'}">
+      <img class="trade-photo" src="${photo}" alt="${escapeHtml(t.person.fullName)}" onerror="this.style.visibility='hidden'">
+      <div>
+        <div class="trade-name">${escapeHtml(t.person.fullName)}</div>
+        <div class="trade-meta"><span class="${directionClass}">${directionLabel}</span> ${escapeHtml(otherTeamName)}</div>
+      </div>
+      <div class="trade-date">${formatShortDate(t.date)}</div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div class="trade-list">${rows}</div>`;
 }
 
 /* ─── Season heatmap ─── */
@@ -4603,6 +4691,7 @@ async function init() {
   const tasks = [
     ['calendar',        loadSchedule],
     ['injuries',        loadInjuries],
+    ['trades',          loadTrades],
     ['heatmap',         loadHeatmap],
     ['season-hitting',  loadSeasonHitting],
     ['season-pitching', loadSeasonPitching],
