@@ -3522,13 +3522,20 @@ function renderBucketList() {
     return;
   }
   el.innerHTML = bucketList.map(p => {
-    const seen = seenPlayers.has(p.player_id);
+    const seenInfo = seenPlayers.get(p.player_id);
+    const seen = !!seenInfo;
     const team = TEAMS[p.team_id];
     const teamLogo = p.team_id
       ? `<img src="https://www.mlbstatic.com/team-logos/${p.team_id}.svg" alt="${escapeHtml(team?.abbr || '')}" onerror="this.style.visibility='hidden'">`
       : '';
     const meta = `${escapeHtml(p.position || '—')}${team ? ' · ' + escapeHtml(team.abbr) : ''}`;
-    const seenBadge = seen ? '<div class="bucket-card-seen-badge">✓ Seen</div>' : '';
+    let seenBadge = '';
+    if (seen) {
+      const dateStr = seenInfo.first_seen_date
+        ? new Date(seenInfo.first_seen_date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+        : '';
+      seenBadge = `<div class="bucket-card-seen-badge">✓ Seen${dateStr ? ` · ${dateStr}` : ''}</div>`;
+    }
     return `<div class="bucket-card ${seen ? 'seen' : 'unseen'}" data-player-id="${p.player_id}">
       <button class="bucket-card-remove" data-player-id="${p.player_id}" aria-label="Remove">×</button>
       <img class="bucket-card-photo" src="${playerPhotoUrl(p.player_id)}" alt="${escapeHtml(p.name)}" onerror="this.style.visibility='hidden'">
