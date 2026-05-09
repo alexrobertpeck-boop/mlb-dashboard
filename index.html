@@ -1335,13 +1335,14 @@
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 12px;
   }
+  .pennants-section { position: relative; z-index: 50; }
   .pennant-card {
     background: #fafafa;
     border: 1px solid #ececec;
     border-radius: 10px;
     padding: 14px 12px;
     text-align: center;
-    transition: filter 0.2s, opacity 0.2s, background 0.2s, border-color 0.2s;
+    transition: background 0.2s, border-color 0.2s;
     position: relative;
     cursor: help;
   }
@@ -1349,20 +1350,25 @@
     background: #f1f8e9;
     border-color: #aed581;
   }
-  .pennant-card.locked {
-    filter: grayscale(0.9);
-    opacity: 0.5;
+  .pennant-card-inner {
+    transition: filter 0.2s, opacity 0.2s;
   }
+  .pennant-card.locked .pennant-card-inner {
+    filter: grayscale(0.9);
+    opacity: 0.55;
+  }
+  .pennant-card:hover { z-index: 100; }
   .pennant-icon {
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     display: flex;
     justify-content: center;
   }
   .pennant-icon svg {
     width: 100%;
     height: auto;
-    max-width: 110px;
+    max-width: 96px;
     display: block;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.18));
   }
   .pennant-name {
     font-weight: 700;
@@ -1382,8 +1388,7 @@
     text-transform: uppercase;
     letter-spacing: 0.4px;
   }
-  .pennant-card[data-tip]::after {
-    content: attr(data-tip);
+  .pennant-tooltip {
     position: absolute;
     top: calc(100% + 8px);
     left: 50%;
@@ -1395,9 +1400,8 @@
     font-size: 12px;
     font-weight: 400;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    white-space: pre-line;
     width: 240px;
-    z-index: 30;
+    z-index: 9999;
     text-align: left;
     line-height: 1.45;
     pointer-events: none;
@@ -1406,7 +1410,19 @@
     visibility: hidden;
     transition: opacity 0.15s ease;
   }
-  .pennant-card:hover[data-tip]::after {
+  .pennant-tooltip-name {
+    display: block;
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 6px;
+    color: #fff;
+  }
+  .pennant-tooltip-criterion {
+    color: #aed581;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .pennant-card:hover .pennant-tooltip {
     opacity: 1;
     visibility: visible;
   }
@@ -1873,7 +1889,7 @@
       <div id="attendance-stats" class="loading">Loading…</div>
     </section>
 
-    <section>
+    <section class="pennants-section">
       <h2>Pennants</h2>
       <p class="attendance-hint">Achievement badges, earned automatically as you log games and visit stadiums.</p>
       <div class="pennants-grid" id="pennants"></div>
@@ -3508,12 +3524,12 @@ function stadiumTooltipHtml(teamId) {
 const AL_TEAM_IDS = [108, 110, 111, 114, 116, 117, 118, 133, 136, 139, 140, 141, 142, 145, 147];
 const NL_TEAM_IDS = [109, 112, 113, 115, 119, 120, 121, 134, 135, 137, 138, 143, 144, 146, 158];
 
-const PENNANT_DIAMOND_ICON = `<g transform="translate(42, 30)" stroke="#fff8e1" stroke-width="1.8" fill="none">
-  <polygon points="0,-11 11,0 0,11 -11,0"/>
-  <circle cx="0" cy="-11" r="1.8" fill="#fff8e1"/>
-  <circle cx="11" cy="0" r="1.8" fill="#fff8e1"/>
-  <circle cx="0" cy="11" r="1.8" fill="#fff8e1"/>
-  <circle cx="-11" cy="0" r="1.8" fill="#fff8e1"/>
+const PENNANT_DIAMOND_ICON = `<g transform="translate(52, 41)" stroke="#fff8e1" stroke-width="2" fill="none" stroke-linejoin="round">
+  <polygon points="0,-13 13,0 0,13 -13,0"/>
+  <circle cx="0" cy="-13" r="2.2" fill="#fff8e1"/>
+  <circle cx="13" cy="0" r="2.2" fill="#fff8e1"/>
+  <circle cx="0" cy="13" r="2.2" fill="#fff8e1"/>
+  <circle cx="-13" cy="0" r="2.2" fill="#fff8e1"/>
 </g>`;
 
 const PENNANTS = [
@@ -3544,14 +3560,39 @@ const PENNANTS = [
 ];
 
 function pennantSvg(p) {
+  const fontSize = !p.label ? 0 : p.label.length === 1 ? 28 : (p.label.length === 2 ? 24 : 22);
   const inner = p.svgContent
     ? p.svgContent
-    : `<text x="44" y="40" font-family="Georgia, 'Times New Roman', serif" font-size="${p.label.length === 1 ? 30 : 24}" font-weight="900" fill="#fff8e1" text-anchor="middle">${p.label}</text>`;
-  return `<svg viewBox="0 0 120 60" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <rect x="1.5" y="0" width="2.5" height="60" fill="#7a5230"/>
-    <circle cx="2.7" cy="2.5" r="3" fill="#7a5230"/>
-    <polygon points="4,4 4,56 116,30" fill="#a02020" stroke="#5a0a0a" stroke-width="0.6"/>
-    <line x1="9" y1="9" x2="9" y2="51" stroke="#fff8e1" stroke-width="0.5" opacity="0.6"/>
+    : `<text x="55" y="48" font-family="Georgia, 'Times New Roman', serif" font-size="${fontSize}" font-weight="900" fill="#fff8e1" text-anchor="middle" letter-spacing="-0.5">${p.label}</text>`;
+  return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+      <linearGradient id="pen-red" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#e85a5a"/>
+        <stop offset="50%" stop-color="#c52020"/>
+        <stop offset="100%" stop-color="#7e1010"/>
+      </linearGradient>
+      <linearGradient id="pen-wood" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#7a5524"/>
+        <stop offset="50%" stop-color="#b78a4a"/>
+        <stop offset="100%" stop-color="#6a4a1c"/>
+      </linearGradient>
+      <radialGradient id="pen-ball" cx="35%" cy="30%" r="60%">
+        <stop offset="0%" stop-color="#fef0a8"/>
+        <stop offset="60%" stop-color="#dfb43a"/>
+        <stop offset="100%" stop-color="#9c7818"/>
+      </radialGradient>
+    </defs>
+    <rect x="11" y="9" width="5" height="84" fill="url(#pen-wood)" rx="2.2"/>
+    <circle cx="13.5" cy="9" r="5.2" fill="url(#pen-ball)" stroke="#7a5d18" stroke-width="0.6"/>
+    <circle cx="11.5" cy="7" r="1.6" fill="#fff7c8" opacity="0.85"/>
+    <path d="M 16,17 L 16,65 L 96,42 Q 96,41 96,41 Z" fill="url(#pen-red)" stroke="#5a0a0a" stroke-width="1.2" stroke-linejoin="round"/>
+    <path d="M 16,17 L 16,23 L 88,40 L 96,41 Z" fill="#fff" opacity="0.22"/>
+    <path d="M 16,65 L 16,59 L 88,42 L 96,41 Z" fill="#000" opacity="0.18"/>
+    <line x1="22" y1="21" x2="22" y2="61" stroke="#fff8e1" stroke-width="1" opacity="0.55"/>
+    <circle cx="19" cy="22" r="0.8" fill="#fff8e1" opacity="0.7"/>
+    <circle cx="19" cy="33" r="0.8" fill="#fff8e1" opacity="0.7"/>
+    <circle cx="19" cy="44" r="0.8" fill="#fff8e1" opacity="0.7"/>
+    <circle cx="19" cy="55" r="0.8" fill="#fff8e1" opacity="0.7"/>
     ${inner}
   </svg>`;
 }
@@ -3638,15 +3679,17 @@ function renderPennants() {
     } else if (!earned && r.target > 1) {
       footer = `<div class="pennant-progress">${r.current} / ${r.target}</div>`;
     }
-    const tipText = `${pennantCriterion(p)}\n\n${p.blurb}`;
-    const safeTip = tipText
-      .replace(/&/g, '&amp;')
-      .replace(/"/g, '&quot;')
-      .replace(/</g, '&lt;');
-    return `<div class="pennant-card ${earned ? 'earned' : 'locked'}" data-tip="${safeTip}">
-      <div class="pennant-icon">${pennantSvg(p)}</div>
-      <div class="pennant-name">${escapeHtml(p.name)}</div>
-      ${footer}
+    return `<div class="pennant-card ${earned ? 'earned' : 'locked'}">
+      <div class="pennant-card-inner">
+        <div class="pennant-icon">${pennantSvg(p)}</div>
+        <div class="pennant-name">${escapeHtml(p.name)}</div>
+        ${footer}
+      </div>
+      <div class="pennant-tooltip">
+        <span class="pennant-tooltip-name">${escapeHtml(p.name)}</span>
+        <div class="pennant-tooltip-criterion">${escapeHtml(pennantCriterion(p))}</div>
+        <div>${escapeHtml(p.blurb)}</div>
+      </div>
     </div>`;
   }).join('');
 }
