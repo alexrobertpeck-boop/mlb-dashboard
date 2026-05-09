@@ -3306,7 +3306,7 @@ function renderGamesList() {
       </span>`;
     }
 
-    const notesHtml = g.notes ? `<div class="game-row-notes">${g.notes}</div>` : '';
+    const notesHtml = g.notes ? `<div class="game-row-notes">${escapeHtml(g.notes)}</div>` : '';
 
     return `<div class="game-row">
       <div class="game-row-date">${date}</div>
