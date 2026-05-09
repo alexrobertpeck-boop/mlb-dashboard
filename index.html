@@ -1390,7 +1390,8 @@
   }
   .pennant-tooltip {
     position: absolute;
-    top: calc(100% + 8px);
+    bottom: calc(100% + 8px);
+    top: auto;
     left: 50%;
     transform: translateX(-50%);
     background: #2a2a2a;
@@ -3524,12 +3525,12 @@ function stadiumTooltipHtml(teamId) {
 const AL_TEAM_IDS = [108, 110, 111, 114, 116, 117, 118, 133, 136, 139, 140, 141, 142, 145, 147];
 const NL_TEAM_IDS = [109, 112, 113, 115, 119, 120, 121, 134, 135, 137, 138, 143, 144, 146, 158];
 
-const PENNANT_DIAMOND_ICON = `<g transform="translate(52, 41)" stroke="#fff8e1" stroke-width="2" fill="none" stroke-linejoin="round">
-  <polygon points="0,-13 13,0 0,13 -13,0"/>
-  <circle cx="0" cy="-13" r="2.2" fill="#fff8e1"/>
-  <circle cx="13" cy="0" r="2.2" fill="#fff8e1"/>
-  <circle cx="0" cy="13" r="2.2" fill="#fff8e1"/>
-  <circle cx="-13" cy="0" r="2.2" fill="#fff8e1"/>
+const PENNANT_DIAMOND_ICON = `<g transform="translate(42, 41)" stroke="#fff8e1" stroke-width="2" fill="none" stroke-linejoin="round">
+  <polygon points="0,-11 11,0 0,11 -11,0"/>
+  <circle cx="0" cy="-11" r="2" fill="#fff8e1"/>
+  <circle cx="11" cy="0" r="2" fill="#fff8e1"/>
+  <circle cx="0" cy="11" r="2" fill="#fff8e1"/>
+  <circle cx="-11" cy="0" r="2" fill="#fff8e1"/>
 </g>`;
 
 const PENNANTS = [
@@ -3563,7 +3564,7 @@ function pennantSvg(p) {
   const fontSize = !p.label ? 0 : p.label.length === 1 ? 28 : (p.label.length === 2 ? 24 : 22);
   const inner = p.svgContent
     ? p.svgContent
-    : `<text x="55" y="48" font-family="Georgia, 'Times New Roman', serif" font-size="${fontSize}" font-weight="900" fill="#fff8e1" text-anchor="middle" letter-spacing="-0.5">${p.label}</text>`;
+    : `<text x="42" y="41" font-family="Georgia, 'Times New Roman', serif" font-size="${fontSize}" font-weight="900" fill="#fff8e1" text-anchor="middle" dominant-baseline="middle" letter-spacing="-0.5">${p.label}</text>`;
   return `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <defs>
       <linearGradient id="pen-red" x1="0%" y1="0%" x2="0%" y2="100%">
