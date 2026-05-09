@@ -3461,6 +3461,16 @@ async function handleSaveGame(e) {
     setGameMessage(`Couldn't save: ${error.message}`, 'error');
     return;
   }
+
+  if (!visitedStadiums.has(homeTeamId)) {
+    const { error: stadErr } = await sb.from('attended_stadiums')
+      .insert({ user_id: user.id, team_id: homeTeamId });
+    if (!stadErr) {
+      visitedStadiums.add(homeTeamId);
+      stadiumMarkers[homeTeamId]?.setIcon(createStadiumIcon(homeTeamId, true));
+    }
+  }
+
   setGameMessage('Saved!', 'info');
   setTimeout(async () => {
     closeAddGameModal();
