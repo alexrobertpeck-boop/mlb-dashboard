@@ -1293,6 +1293,43 @@
   main[data-view="attendance"] .header-brand:hover { background: transparent; }
 
   /* ─── Attendance view ─── */
+  .attendance-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .attendance-header-row h2 { margin: 0; }
+  .games-add-btn-top { margin: 0; }
+  .teams-seen-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 8px;
+  }
+  .teams-seen-cell {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fafafa;
+    border: 1px solid #ececec;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: filter 0.15s, background 0.15s, opacity 0.15s;
+  }
+  .teams-seen-cell:hover { background: #f0f0f0; }
+  .teams-seen-cell img {
+    width: 75%;
+    height: 75%;
+    object-fit: contain;
+  }
+  .teams-seen-cell.unseen { filter: grayscale(1); opacity: 0.3; }
+  .teams-seen-cell.locked { cursor: default; }
+  @media (max-width: 720px) {
+    .teams-seen-grid { grid-template-columns: repeat(6, 1fr); }
+  }
   .attendance-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
   .attendance-stat {
     background: #fafafa;
@@ -1576,7 +1613,7 @@
         </a>
       </div>
       <div class="utility-right">
-        <a href="/?view=attendance" class="utility-link" id="stadiums-link" hidden>My Stadiums</a>
+        <a href="/?view=attendance" class="utility-link" id="stadiums-link" hidden>My Tracker</a>
         <div class="auth-area" id="auth-area"></div>
       </div>
     </div>
@@ -1629,7 +1666,10 @@
 
   <div id="attendance-view" hidden>
     <section>
-      <h2>My Attendance</h2>
+      <div class="attendance-header-row">
+        <h2>My Attendance</h2>
+        <button class="auth-submit games-add-btn games-add-btn-top" id="add-game-btn-top">+ Log a Game</button>
+      </div>
       <div id="attendance-stats" class="loading">Loading…</div>
     </section>
 
@@ -1637,6 +1677,12 @@
       <h2>Stadiums Visited</h2>
       <p class="attendance-hint">Click a stadium to mark it as visited. Click again to remove.</p>
       <div id="stadium-map"></div>
+    </section>
+
+    <section>
+      <h2>Teams Seen</h2>
+      <p class="attendance-hint">Auto-marked when you log a game. Click any greyed-out logo to mark a team you've seen elsewhere (spring training, exhibitions, etc.).</p>
+      <div class="teams-seen-grid" id="teams-seen-grid"></div>
     </section>
 
     <section>
@@ -3099,6 +3145,7 @@ const STADIUMS = {
 };
 
 let visitedStadiums = new Set();
+let seenTeams = new Set();
 let stadiumMap = null;
 const stadiumMarkers = {};
 
@@ -3228,6 +3275,49 @@ async function onStadiumClick(teamId) {
   renderAttendanceStats();
 }
 
+function renderTeamsSeen() {
+  const el = document.getElementById('teams-seen-grid');
+  if (!el) return;
+  const derived = new Set();
+  for (const g of attendedGames) { derived.add(g.home_team_id); derived.add(g.away_team_id); }
+  const sorted = Object.entries(TEAMS).sort((a, b) => a[1].name.localeCompare(b[1].name));
+  el.innerHTML = sorted.map(([id, t]) => {
+    const teamId = parseInt(id, 10);
+    const seen = seenTeams.has(teamId) || derived.has(teamId);
+    const locked = derived.has(teamId);
+    const logo = `https://www.mlbstatic.com/team-logos/${teamId}.svg`;
+    const tip = locked ? `${t.name} — seen at a logged game` : t.name;
+    return `<div class="teams-seen-cell ${seen ? '' : 'unseen'} ${locked ? 'locked' : ''}" data-team-id="${teamId}" data-locked="${locked ? 1 : 0}" title="${escapeHtml(tip)}">
+      <img src="${logo}" alt="${escapeHtml(t.abbr || '')}" onerror="this.style.visibility='hidden'">
+    </div>`;
+  }).join('');
+  el.querySelectorAll('.teams-seen-cell').forEach(cell => {
+    if (cell.dataset.locked === '1') return;
+    cell.addEventListener('click', () => onTeamSeenClick(parseInt(cell.dataset.teamId, 10)));
+  });
+}
+
+async function onTeamSeenClick(teamId) {
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return;
+  try {
+    if (seenTeams.has(teamId)) {
+      const { error } = await sb.from('seen_teams').delete().eq('user_id', user.id).eq('team_id', teamId);
+      if (error) throw error;
+      seenTeams.delete(teamId);
+    } else {
+      const { error } = await sb.from('seen_teams').insert({ user_id: user.id, team_id: teamId });
+      if (error) throw error;
+      seenTeams.add(teamId);
+    }
+  } catch (e) {
+    console.error('Team-seen toggle failed:', e);
+    return;
+  }
+  renderTeamsSeen();
+  renderAttendanceStats();
+}
+
 let attendedGames = [];
 
 function renderAttendanceStats() {
@@ -3235,8 +3325,8 @@ function renderAttendanceStats() {
   const stadiumsSeen = new Set(visitedStadiums);
   for (const g of attendedGames) stadiumsSeen.add(g.home_team_id);
 
-  // Teams seen = home teams of stadiums ∪ both teams of logged games
-  const teamsSeen = new Set(visitedStadiums);
+  // Teams seen = explicit seen_teams ∪ both teams of logged games
+  const teamsSeen = new Set(seenTeams);
   for (const g of attendedGames) {
     teamsSeen.add(g.home_team_id);
     teamsSeen.add(g.away_team_id);
@@ -3262,18 +3352,22 @@ function renderAttendanceStats() {
 }
 
 async function loadAttendance() {
-  // Stadiums + games loaded in parallel; both feed the stats panel.
-  const [stadiumsRes, gamesRes] = await Promise.all([
+  // Stadiums + games + seen teams loaded in parallel; all feed the stats panel.
+  const [stadiumsRes, gamesRes, seenTeamsRes] = await Promise.all([
     sb.from('attended_stadiums').select('team_id'),
     sb.from('attended_games').select('*').order('game_date', { ascending: false }),
+    sb.from('seen_teams').select('team_id'),
   ]);
   if (stadiumsRes.error) { console.error('Stadiums load failed:', stadiumsRes.error); visitedStadiums = new Set(); }
   else { visitedStadiums = new Set(stadiumsRes.data.map(r => r.team_id)); }
   if (gamesRes.error) { console.error('Games load failed:', gamesRes.error); attendedGames = []; }
   else { attendedGames = gamesRes.data || []; }
+  if (seenTeamsRes.error) { console.error('Seen teams load failed:', seenTeamsRes.error); seenTeams = new Set(); }
+  else { seenTeams = new Set(seenTeamsRes.data.map(r => r.team_id)); }
 
   renderAttendanceStats();
   renderStadiumMap();
+  renderTeamsSeen();
   renderGamesList();
   wireAddGameModal();
 }
@@ -3471,14 +3565,21 @@ async function handleSaveGame(e) {
     }
   }
 
+  const teamsToMark = [homeTeamId, awayTeamId].filter(id => !seenTeams.has(id));
+  if (teamsToMark.length) {
+    const rows = teamsToMark.map(id => ({ user_id: user.id, team_id: id }));
+    const { error: teamErr } = await sb.from('seen_teams').insert(rows);
+    if (!teamErr) teamsToMark.forEach(id => seenTeams.add(id));
+  }
+
   setGameMessage('Saved!', 'info');
   setTimeout(async () => {
     closeAddGameModal();
-    // Reload the games + stats
     const { data } = await sb.from('attended_games').select('*').order('game_date', { ascending: false });
     attendedGames = data || [];
     renderGamesList();
     renderAttendanceStats();
+    renderTeamsSeen();
   }, 600);
 }
 
@@ -3487,6 +3588,7 @@ function wireAddGameModal() {
   if (addGameModalWired) return;
   addGameModalWired = true;
   document.getElementById('add-game-btn').addEventListener('click', openAddGameModal);
+  document.getElementById('add-game-btn-top').addEventListener('click', openAddGameModal);
   document.querySelector('#add-game-modal .auth-modal-backdrop').addEventListener('click', closeAddGameModal);
   document.getElementById('add-game-modal-close').addEventListener('click', closeAddGameModal);
   document.getElementById('game-date').addEventListener('change', triggerDateGames);
@@ -3778,8 +3880,8 @@ async function init() {
   }
 
   if (view === 'attendance') {
-    document.title = '162-0 · My Stadiums';
-    document.getElementById('header-team-name').textContent = 'My Stadiums';
+    document.title = '162-0 · My Tracker';
+    document.getElementById('header-team-name').textContent = 'My Tracker';
     // Default MLB blue/red theme — no team-specific colors here
     await loadAttendance();
     return;
