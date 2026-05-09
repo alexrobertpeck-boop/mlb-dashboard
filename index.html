@@ -1342,31 +1342,33 @@
     padding: 14px 12px;
     text-align: center;
     transition: filter 0.2s, opacity 0.2s, background 0.2s, border-color 0.2s;
+    position: relative;
+    cursor: help;
   }
   .pennant-card.earned {
-    background: #fff8e1;
-    border-color: #ffd54f;
+    background: #f1f8e9;
+    border-color: #aed581;
   }
   .pennant-card.locked {
-    filter: grayscale(0.85);
+    filter: grayscale(0.9);
     opacity: 0.5;
   }
   .pennant-icon {
-    font-size: 32px;
-    line-height: 1;
     margin-bottom: 6px;
+    display: flex;
+    justify-content: center;
+  }
+  .pennant-icon svg {
+    width: 100%;
+    height: auto;
+    max-width: 110px;
+    display: block;
   }
   .pennant-name {
     font-weight: 700;
     font-size: 0.85em;
     margin-bottom: 4px;
     line-height: 1.25;
-  }
-  .pennant-blurb {
-    font-size: 0.74em;
-    color: #666;
-    margin-bottom: 5px;
-    line-height: 1.3;
   }
   .pennant-progress {
     font-size: 0.78em;
@@ -1375,10 +1377,38 @@
   }
   .pennant-date {
     font-size: 0.7em;
-    color: #b8860b;
+    color: #2e7d32;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.4px;
+  }
+  .pennant-card[data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #2a2a2a;
+    color: white;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 400;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    white-space: pre-line;
+    width: 240px;
+    z-index: 30;
+    text-align: left;
+    line-height: 1.45;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease;
+  }
+  .pennant-card:hover[data-tip]::after {
+    opacity: 1;
+    visibility: visible;
   }
   .bucket-list {
     display: grid;
@@ -3478,20 +3508,62 @@ function stadiumTooltipHtml(teamId) {
 const AL_TEAM_IDS = [108, 110, 111, 114, 116, 117, 118, 133, 136, 139, 140, 141, 142, 145, 147];
 const NL_TEAM_IDS = [109, 112, 113, 115, 119, 120, 121, 134, 135, 137, 138, 143, 144, 146, 158];
 
+const PENNANT_DIAMOND_ICON = `<g transform="translate(42, 30)" stroke="#fff8e1" stroke-width="1.8" fill="none">
+  <polygon points="0,-11 11,0 0,11 -11,0"/>
+  <circle cx="0" cy="-11" r="1.8" fill="#fff8e1"/>
+  <circle cx="11" cy="0" r="1.8" fill="#fff8e1"/>
+  <circle cx="0" cy="11" r="1.8" fill="#fff8e1"/>
+  <circle cx="-11" cy="0" r="1.8" fill="#fff8e1"/>
+</g>`;
+
 const PENNANTS = [
-  { id: 'ty-cobb',           name: 'Ty Cobb Award',           icon: '⚾', target: { type: 'games', n: 1  }, blurb: '' },
-  { id: 'babe-ruth',         name: 'Babe Ruth Award',         icon: '💪', target: { type: 'games', n: 3  }, blurb: '' },
-  { id: 'yogi-berra',        name: 'Yogi Berra Award',        icon: '🧢', target: { type: 'games', n: 8  }, blurb: '' },
-  { id: 'pete-rose',         name: 'Pete Rose Award',         icon: '🏃', target: { type: 'games', n: 14 }, blurb: '' },
-  { id: 'ken-griffey-jr',    name: 'Ken Griffey Jr. Award',   icon: '👑', target: { type: 'games', n: 24 }, blurb: '' },
-  { id: 'nolan-ryan',        name: 'Nolan Ryan Award',        icon: '🔥', target: { type: 'games', n: 34 }, blurb: '' },
-  { id: 'jackie-robinson',   name: 'Jackie Robinson Award',   icon: '✊', target: { type: 'games', n: 42 }, blurb: '' },
-  { id: 'ichiro-suzuki',     name: 'Ichiro Suzuki Award',     icon: '🎯', target: { type: 'games', n: 51 }, blurb: '' },
-  { id: 'edwin-jackson',     name: 'Edwin Jackson Award',     icon: '🌎', target: { type: 'all-teams' },   blurb: '' },
-  { id: 'janet-marie-smith', name: 'Janet Marie Smith Award', icon: '🏟️', target: { type: 'all-stadiums' }, blurb: '' },
-  { id: 'willie-mays',       name: 'Willie Mays Award',       icon: '🧤', target: { type: 'league-teams', league: 'NL' }, blurb: '' },
-  { id: 'mickey-mantle',     name: 'Mickey Mantle Award',     icon: '⚡', target: { type: 'league-teams', league: 'AL' }, blurb: '' },
+  { id: 'ty-cobb',           name: 'Ty Cobb Award',           label: '#',  target: { type: 'games', n: 1  },
+    blurb: "Legend of the Deadball Era, and the first inductee into the Hall of Fame; you've logged your first game." },
+  { id: 'babe-ruth',         name: 'Babe Ruth Award',         label: '3',  target: { type: 'games', n: 3  },
+    blurb: "The Bambino, The Curse and The House; you've logged 3 games." },
+  { id: 'yogi-berra',        name: 'Yogi Berra Award',        label: '8',  target: { type: 'games', n: 8  },
+    blurb: "10 World Series rings from behind the plate, the philosopher and soul of the Yankees, it ain't over till it's over; you've logged 8 games." },
+  { id: 'pete-rose',         name: 'Pete Rose Award',         label: '14', target: { type: 'games', n: 14 },
+    blurb: "All-time hit leader, Charlie Hustle, sometimes baseball's a roll of the dice; you've logged 14 games." },
+  { id: 'ken-griffey-jr',    name: 'Ken Griffey Jr. Award',   label: '24', target: { type: 'games', n: 24 },
+    blurb: "The most beautiful swing in baseball, king of the 90s; you've logged 24 games." },
+  { id: 'nolan-ryan',        name: 'Nolan Ryan Award',        label: '34', target: { type: 'games', n: 34 },
+    blurb: "27 seasons, 7 no-hitters, they don't make 'em like the Ryan Express no more; you've logged 34 games." },
+  { id: 'jackie-robinson',   name: 'Jackie Robinson Award',   label: '42', target: { type: 'games', n: 42 },
+    blurb: "He stole home so the rest could see the batter's box, the ultimate Rookie of the Year; you've logged 42 games." },
+  { id: 'ichiro-suzuki',     name: 'Ichiro Suzuki Award',     label: '51', target: { type: 'games', n: 51 },
+    blurb: "10 straight seasons of 200+ hits, 262 in a single summer — but it wasn't about the records, it was the way he did it; you've logged 51 games." },
+  { id: 'edwin-jackson',     name: 'Edwin Jackson Award',     label: '30', target: { type: 'all-teams' },
+    blurb: "One of baseball's all-time journeymen, playing for 14 teams in 19 seasons. You've seen every team in the big leagues." },
+  { id: 'janet-marie-smith', name: 'Janet Marie Smith Award', svgContent: PENNANT_DIAMOND_ICON, target: { type: 'all-stadiums' },
+    blurb: "The visionary behind the retro-classic ballpark, and designer of Camden Yards. We have her to thank for asymmetric outfields, exposed steel, and downtown locations — ballparks with soul." },
+  { id: 'willie-mays',       name: 'Willie Mays Award',       label: 'NL', target: { type: 'league-teams', league: 'NL' },
+    blurb: "Legend of the National League on both coasts, a true 5-tool player; you've seen every team in the NL." },
+  { id: 'mickey-mantle',     name: 'Mickey Mantle Award',     label: 'AL', target: { type: 'league-teams', league: 'AL' },
+    blurb: "Legend of the American League, raw talent in pinstripes; you've seen every team in the AL." },
 ];
+
+function pennantSvg(p) {
+  const inner = p.svgContent
+    ? p.svgContent
+    : `<text x="44" y="40" font-family="Georgia, 'Times New Roman', serif" font-size="${p.label.length === 1 ? 30 : 24}" font-weight="900" fill="#fff8e1" text-anchor="middle">${p.label}</text>`;
+  return `<svg viewBox="0 0 120 60" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <rect x="1.5" y="0" width="2.5" height="60" fill="#7a5230"/>
+    <circle cx="2.7" cy="2.5" r="3" fill="#7a5230"/>
+    <polygon points="4,4 4,56 116,30" fill="#a02020" stroke="#5a0a0a" stroke-width="0.6"/>
+    <line x1="9" y1="9" x2="9" y2="51" stroke="#fff8e1" stroke-width="0.5" opacity="0.6"/>
+    ${inner}
+  </svg>`;
+}
+
+function pennantCriterion(p) {
+  const t = p.target;
+  if (t.type === 'games') return `${t.n} game${t.n === 1 ? '' : 's'} logged`;
+  if (t.type === 'all-teams') return 'All 30 MLB teams seen';
+  if (t.type === 'all-stadiums') return 'All 30 MLB stadiums visited';
+  if (t.type === 'league-teams') return t.league === 'AL' ? 'Every AL team seen' : 'Every NL team seen';
+  return '';
+}
 
 function evaluatePennant(p, ctx) {
   const t = p.target;
@@ -3560,17 +3632,20 @@ function renderPennants() {
   el.innerHTML = PENNANTS.map(p => {
     const r = evaluatePennant(p, ctx);
     const earned = r.earned;
-    const blurbLine = p.blurb ? `<div class="pennant-blurb">${escapeHtml(p.blurb)}</div>` : '';
     let footer = '';
     if (earned && r.earnedDate) {
       footer = `<div class="pennant-date">${formatShortDate(r.earnedDate)}</div>`;
     } else if (!earned && r.target > 1) {
       footer = `<div class="pennant-progress">${r.current} / ${r.target}</div>`;
     }
-    return `<div class="pennant-card ${earned ? 'earned' : 'locked'}">
-      <div class="pennant-icon">${p.icon}</div>
+    const tipText = `${pennantCriterion(p)}\n\n${p.blurb}`;
+    const safeTip = tipText
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;');
+    return `<div class="pennant-card ${earned ? 'earned' : 'locked'}" data-tip="${safeTip}">
+      <div class="pennant-icon">${pennantSvg(p)}</div>
       <div class="pennant-name">${escapeHtml(p.name)}</div>
-      ${blurbLine}
       ${footer}
     </div>`;
   }).join('');
