@@ -3317,11 +3317,12 @@ function renderStadiumMap() {
 
   const offsets = STADIUM_OFFSETS;
 
+  const derivedDates = getDerivedStadiumFirstDates();
   for (const [idStr, stadium] of Object.entries(STADIUMS)) {
     const teamId = parseInt(idStr, 10);
     const team = TEAMS[teamId];
     if (!team) continue;
-    const visited = visitedStadiums.has(teamId);
+    const visited = visitedStadiums.has(teamId) || derivedDates.has(teamId);
     const offset = offsets[teamId];
     const displayLat = offset ? stadium.lat + offset.dlat : stadium.lat;
     const displayLng = offset ? stadium.lng + offset.dlng : stadium.lng;
@@ -3352,7 +3353,7 @@ function renderStadiumMap() {
       title: `${team.name} — ${stadium.name}`,
     }).addTo(stadiumMap);
 
-    marker.bindTooltip(`<strong>${stadium.name}</strong><br>${team.name}<br><span style="opacity:0.7">${stadium.city}</span>`, {
+    marker.bindTooltip(stadiumTooltipHtml(teamId), {
       direction: 'top',
       offset: [0, -10],
     });
@@ -3391,9 +3392,37 @@ const STADIUM_OFFSETS = {
   133: { dlat:  1.5, dlng:  1.5 },  // ATH: NE (Sierras)
 };
 
+function getDerivedStadiumFirstDates() {
+  const map = new Map();
+  for (const g of attendedGames) {
+    const cur = map.get(g.home_team_id);
+    if (!cur || g.game_date < cur) map.set(g.home_team_id, g.game_date);
+  }
+  return map;
+}
+
+function formatShortDate(iso) {
+  return new Date(iso + 'T12:00:00').toLocaleDateString(undefined, {
+    month: 'short', day: 'numeric', year: 'numeric',
+  });
+}
+
+function stadiumTooltipHtml(teamId) {
+  const team = TEAMS[teamId];
+  const stadium = STADIUMS[teamId];
+  const firstDate = getDerivedStadiumFirstDates().get(teamId);
+  const dateLine = firstDate
+    ? `<br><span style="opacity:0.75">First game: ${formatShortDate(firstDate)}</span>`
+    : '';
+  return `<strong>${stadium.name}</strong><br>${team.name}<br><span style="opacity:0.7">${stadium.city}</span>${dateLine}`;
+}
+
 async function onStadiumClick(teamId) {
   const { data: { user } } = await sb.auth.getUser();
   if (!user) return;
+
+  // Lock: stadiums tied to a logged game can't be unmarked from the map
+  if (getDerivedStadiumFirstDates().has(teamId)) return;
 
   const wasVisited = visitedStadiums.has(teamId);
   try {
@@ -3413,7 +3442,6 @@ async function onStadiumClick(teamId) {
     return;
   }
 
-  // Update marker icon and stats
   stadiumMarkers[teamId]?.setIcon(createStadiumIcon(teamId, !wasVisited));
   renderAttendanceStats();
 }
@@ -3534,7 +3562,7 @@ function renderBucketList() {
       const dateStr = seenInfo.first_seen_date
         ? new Date(seenInfo.first_seen_date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
         : '';
-      seenBadge = `<div class="bucket-card-seen-badge">✓ Seen${dateStr ? ` · ${dateStr}` : ''}</div>`;
+      seenBadge = `<div class="bucket-card-seen-badge">✓ Seen${dateStr ? `<br>${dateStr}` : ''}</div>`;
     }
     return `<div class="bucket-card ${seen ? 'seen' : 'unseen'}" data-player-id="${p.player_id}">
       <button class="bucket-card-remove" data-player-id="${p.player_id}" aria-label="Remove">×</button>
@@ -3758,20 +3786,6 @@ async function loadAttendance() {
   if (seenPlayersRes.error) { console.error('Seen players load failed:', seenPlayersRes.error); seenPlayers = new Map(); }
   else { seenPlayers = new Map((seenPlayersRes.data || []).map(r => [r.player_id, r])); }
 
-  // Self-healing backfill: ensure all teams from logged games are in seen_teams.
-  // Idempotent: no-op once synced. Catches existing logged games pre-auto-mark.
-  const { data: { user } } = await sb.auth.getUser();
-  if (user) {
-    const derived = new Set();
-    for (const g of attendedGames) { derived.add(g.home_team_id); derived.add(g.away_team_id); }
-    const missing = [...derived].filter(id => !seenTeams.has(id));
-    if (missing.length) {
-      const rows = missing.map(id => ({ user_id: user.id, team_id: id }));
-      const { error } = await sb.from('seen_teams').insert(rows);
-      if (!error) missing.forEach(id => seenTeams.add(id));
-    }
-  }
-
   renderAttendanceStats();
   renderStadiumMap();
   renderTeamsSeen();
@@ -3965,22 +3979,6 @@ async function handleSaveGame(e) {
     return;
   }
 
-  if (!visitedStadiums.has(homeTeamId)) {
-    const { error: stadErr } = await sb.from('attended_stadiums')
-      .insert({ user_id: user.id, team_id: homeTeamId });
-    if (!stadErr) {
-      visitedStadiums.add(homeTeamId);
-      stadiumMarkers[homeTeamId]?.setIcon(createStadiumIcon(homeTeamId, true));
-    }
-  }
-
-  const teamsToMark = [homeTeamId, awayTeamId].filter(id => !seenTeams.has(id));
-  if (teamsToMark.length) {
-    const rows = teamsToMark.map(id => ({ user_id: user.id, team_id: id }));
-    const { error: teamErr } = await sb.from('seen_teams').insert(rows);
-    if (!teamErr) teamsToMark.forEach(id => seenTeams.add(id));
-  }
-
   const savedGamePk = gamePkStr ? parseInt(gamePkStr, 10) : null;
   if (savedGamePk) {
     // Fire-and-forget; renderBucketList runs inside if there are hits
@@ -3995,6 +3993,9 @@ async function handleSaveGame(e) {
     renderGamesList();
     renderAttendanceStats();
     renderTeamsSeen();
+    // Refresh the home stadium's marker — it's now game-derived
+    stadiumMarkers[homeTeamId]?.setIcon(createStadiumIcon(homeTeamId, true));
+    stadiumMarkers[homeTeamId]?.setTooltipContent(stadiumTooltipHtml(homeTeamId));
   }, 600);
 }
 
