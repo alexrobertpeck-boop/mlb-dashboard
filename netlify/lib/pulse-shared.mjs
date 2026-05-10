@@ -130,7 +130,7 @@ ${ilMoves.length ? ilMoves.join('\n') : '(none recent)'}
 RECENT NEWS HEADLINES:
 ${headlines.length ? headlines.map(h => `- ${h}`).join('\n') : '(no recent headlines)'}
 
-Write 2 short paragraphs, 80-130 words total. Friendly and conversational, like a knowledgeable friend at a bar — opinions welcome but grounded in the data above. No bullet points, no headers, no stat dumps. Start immediately with the recap; no preamble.`;
+Write 2 short paragraphs, 80-130 words total. Friendly and conversational, like a knowledgeable friend at a bar — opinions welcome but grounded in the data above. Start immediately with the recap; no preamble or title. Output plain prose only — no markdown formatting (no **bold**, no *italics*, no bullet points, no headers).`;
 }
 
 // ---------- MLB Pulse ----------
@@ -234,7 +234,7 @@ ${transText}
 LEAGUE HEADLINES:
 ${headlinesText}
 
-Write 2-3 short paragraphs, 100-160 words total. Conversational and opinionated, the kind of "did you see what happened last night" tone a friend would use over coffee. No bullet points, no headers. Don't try to cover everything — pick what's actually interesting and lean in. Start immediately with the most interesting hook; no preamble.`;
+Write 2-3 short paragraphs, 100-160 words total. Conversational and opinionated, the kind of "did you see what happened last night" tone a friend would use over coffee. Don't try to cover everything — pick what's actually interesting and lean in. Start immediately with the most interesting hook; no preamble or title. Output plain prose only — no markdown formatting (no **bold**, no *italics*, no bullet points, no headers).`;
 }
 
 // ---------- Claude + Supabase ----------
