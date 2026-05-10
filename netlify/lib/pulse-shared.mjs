@@ -261,8 +261,18 @@ export async function callClaude(prompt, apiKey, maxTokens = 700) {
   return data.content?.[0]?.text?.trim() || '';
 }
 
+function normalizeSupabaseUrl(url) {
+  if (!url) return url;
+  // Strip trailing slash
+  let u = url.replace(/\/+$/, '');
+  // If user pasted the API URL (.../rest/v1) instead of the project URL, strip it
+  u = u.replace(/\/rest\/v1$/, '');
+  return u;
+}
+
 export async function supabaseSelect(url, key, table, filter) {
-  const res = await fetch(`${url}/rest/v1/${table}?${filter}`, {
+  const base = normalizeSupabaseUrl(url);
+  const res = await fetch(`${base}/rest/v1/${table}?${filter}`, {
     headers: {
       'apikey': key,
       'Authorization': `Bearer ${key}`,
@@ -273,7 +283,8 @@ export async function supabaseSelect(url, key, table, filter) {
 }
 
 export async function supabaseUpsert(url, key, table, row) {
-  const res = await fetch(`${url}/rest/v1/${table}`, {
+  const base = normalizeSupabaseUrl(url);
+  const res = await fetch(`${base}/rest/v1/${table}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
