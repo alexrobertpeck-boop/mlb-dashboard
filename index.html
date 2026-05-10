@@ -1972,7 +1972,7 @@
     </div>
   </section>
 
-  <section>
+  <section id="team-pulse-section">
     <h2>Team Pulse <span class="ai-badge">AI</span></h2>
     <div id="team-pulse" class="loading">Generating…</div>
   </section>
@@ -4688,6 +4688,10 @@ async function init() {
   // Standings runs first — sets teamGamesPlayed which the season stat thresholds rely on
   await loadStandings().catch(showError('standings'));
 
+  // Team Pulse is gated to logged-in users (avoids spending Claude tokens on anonymous traffic)
+  const tpSection = document.getElementById('team-pulse-section');
+  if (tpSection) tpSection.hidden = !user;
+
   const tasks = [
     ['calendar',        loadSchedule],
     ['injuries',        loadInjuries],
@@ -4695,7 +4699,7 @@ async function init() {
     ['heatmap',         loadHeatmap],
     ['season-hitting',  loadSeasonHitting],
     ['season-pitching', loadSeasonPitching],
-    ['team-pulse',      loadTeamPulse],
+    ...(user ? [['team-pulse', loadTeamPulse]] : []),
     ['news',            loadNews],
     ['playoff-odds',    loadPlayoffOdds],
   ];

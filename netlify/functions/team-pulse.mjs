@@ -88,10 +88,10 @@ async function gatherTeamContext(teamId) {
   const season = new Date().getFullYear();
 
   const [scheduleData, standingsData, newsData, transData] = await Promise.all([
-    fetch(`${MLB_API}/schedule?sportId=1&teamId=${teamId}&startDate=${isoDate(-14)}&endDate=${isoDate(7)}`).then(r => r.json()).catch(() => ({})),
+    fetch(`${MLB_API}/schedule?sportId=1&teamId=${teamId}&startDate=${isoDate(-7)}&endDate=${isoDate(7)}&hydrate=decisions,probablePitcher`).then(r => r.json()).catch(() => ({})),
     fetch(`${MLB_API}/standings?leagueId=103,104&season=${season}`).then(r => r.json()).catch(() => ({})),
     fetch(`https://dapi.cms.mlbinfra.com/v2/content/en-us/sel-t${teamId}-news-list`).then(r => r.json()).catch(() => ({})),
-    fetch(`${MLB_API}/transactions?teamId=${teamId}&startDate=${isoDate(-21)}&endDate=${isoDate(0)}`).then(r => r.json()).catch(() => ({})),
+    fetch(`${MLB_API}/transactions?teamId=${teamId}&startDate=${isoDate(-7)}&endDate=${isoDate(0)}`).then(r => r.json()).catch(() => ({})),
   ]);
 
   // Standings → record + division
@@ -116,13 +116,14 @@ async function gatherTeamContext(teamId) {
     }
   }
 
-  // Schedule → recent finished games + upcoming
+  // Schedule → recent finished games (most recent first) + upcoming (next 3)
   const allGames = (scheduleData.dates || []).flatMap(d => d.games.map(g => ({ ...g, _date: d.date })));
   const finished = allGames
     .filter(g => g.status.detailedState === 'Final'
       && g.teams.home.score !== undefined
       && g.teams.away.score !== undefined)
-    .slice(-5);
+    .slice(-5)
+    .reverse();
   const upcoming = allGames
     .filter(g => g.status.abstractGameState === 'Preview')
     .slice(0, 3);
@@ -144,41 +145,53 @@ async function gatherTeamContext(teamId) {
 }
 
 function buildPrompt(ctx) {
-  const { teamRecord, divisionName, recentGames, upcoming, headlines, ilMoves, teamId } = ctx;
+  const { teamRecord, recentGames, upcoming, headlines, ilMoves, teamId } = ctx;
 
+  // Most-recent first; first row is the LAST GAME — the prompt anchors here
   const recentLines = recentGames.map(g => {
     const isHome = g.teams.home.team.id === teamId;
     const my = isHome ? g.teams.home.score : g.teams.away.score;
     const opp = isHome ? g.teams.away.score : g.teams.home.score;
     const oppName = (isHome ? g.teams.away.team : g.teams.home.team).name;
     const result = my > opp ? 'W' : 'L';
-    return `- ${g._date}: ${result} ${my}-${opp} ${isHome ? 'vs' : '@'} ${oppName}`;
+    const d = g.decisions || {};
+    const decisionParts = [];
+    if (d.winner?.fullName) decisionParts.push(`WP ${d.winner.fullName}`);
+    if (d.loser?.fullName)  decisionParts.push(`LP ${d.loser.fullName}`);
+    if (d.save?.fullName)   decisionParts.push(`SV ${d.save.fullName}`);
+    const decisionTail = decisionParts.length ? ` (${decisionParts.join(', ')})` : '';
+    return `- ${g._date}: ${result} ${my}-${opp} ${isHome ? 'vs' : '@'} ${oppName}${decisionTail}`;
   }).join('\n') || '(no recent finalized games)';
 
   const upcomingLines = upcoming.map(g => {
     const isHome = g.teams.home.team.id === teamId;
     const oppName = (isHome ? g.teams.away.team : g.teams.home.team).name;
-    return `- ${g.gameDate.slice(0, 10)}: ${isHome ? 'vs' : '@'} ${oppName}`;
+    const myProb  = (isHome ? g.teams.home : g.teams.away).probablePitcher?.fullName;
+    const oppProb = (isHome ? g.teams.away : g.teams.home).probablePitcher?.fullName;
+    const matchup = (myProb || oppProb) ? ` (${myProb || 'TBD'} vs ${oppProb || 'TBD'})` : '';
+    return `- ${g.gameDate.slice(0, 10)}: ${isHome ? 'vs' : '@'} ${oppName}${matchup}`;
   }).join('\n') || '(no upcoming games scheduled in window)';
 
-  return `You're a baseball analyst writing a brief, friendly status update for fans of the ${teamRecord.name}. Today's date is ${isoDate(0)}.
+  return `You're writing today's Team Pulse for fans of the ${teamRecord.name}. Today's date is ${isoDate(0)}.
 
-CURRENT RECORD: ${teamRecord.wins}-${teamRecord.losses} (.${(parseFloat(teamRecord.pct) * 1000).toFixed(0).padStart(3, '0')} pct)
-DIVISION: #${teamRecord.divisionRank} in ${divisionName}, ${teamRecord.gamesBack} GB
-LAST 10: ${teamRecord.lastTen}
-CURRENT STREAK: ${teamRecord.streak || 'none'}
+Focus on three things, in order of importance:
+1. THE LAST GAME — what happened, the moments people are still talking about, who showed up, who didn't. This is the heart of the piece.
+2. THE NEXT GAME — what to watch for, the matchup, any storyline going in.
+3. ANY GENUINELY RECENT NEWS — only if there's something actually new in the last day or two (an injury, a transaction, a big headline). Skip this section if nothing fits.
 
-RECENT GAMES:
+Don't restate the season record, division standing, or whether they're slumping/streaking — fans already know. Don't pad with generic season-context. Don't invent details that aren't in the data below. If the last game was unremarkable, lean harder into the matchup ahead.
+
+LAST GAME (most recent first; row 1 is the game to recap):
 ${recentLines}
 
-UPCOMING GAMES:
+NEXT GAMES:
 ${upcomingLines}
 
-RECENT INJURY MOVES:
-${ilMoves.length ? ilMoves.join('\n') : '(none in last 3 weeks)'}
+RECENT INJURY MOVES (last week):
+${ilMoves.length ? ilMoves.join('\n') : '(none recent)'}
 
 RECENT NEWS HEADLINES:
 ${headlines.length ? headlines.map(h => `- ${h}`).join('\n') : '(no recent headlines)'}
 
-Write a 2-paragraph summary (about 80-130 words total) capturing how this team is currently doing. Sound like a knowledgeable friend at a bar — natural, conversational, opinions allowed but grounded in the data. Don't use bullet points or section headers. Don't recap stats line by line. Focus on momentum, key storylines from the recent games, notable injury news, and what's coming up. Start the response immediately with the first paragraph; no preamble like "Here's a summary."`;
+Write 2 short paragraphs, 80-130 words total. Friendly and conversational, like a knowledgeable friend at a bar — opinions welcome but grounded in the data above. No bullet points, no headers, no stat dumps. Start immediately with the recap; no preamble.`;
 }
