@@ -13,9 +13,30 @@ const BATCH_SIZE = 5; // 5 concurrent FanGraphs fetches at a time — polite-ish
 
 export default async (req) => {
   const url = new URL(req.url);
+
+  // Debug mode: ?debug=N returns the raw FanGraphs response shape for
+  // dateDelta=N, so we can inspect why mapping is failing.
+  const debug = url.searchParams.get('debug');
+  if (debug !== null) {
+    const daysAgo = parseInt(debug, 10) || 0;
+    try {
+      const data = await fetchFanGraphsOdds(daysAgo);
+      const summary = {
+        daysAgo,
+        type: Array.isArray(data) ? 'array' : typeof data,
+        length: Array.isArray(data) ? data.length : null,
+        sampleKeys: Array.isArray(data) && data[0] ? Object.keys(data[0]).slice(0, 30) : null,
+        firstThree: Array.isArray(data) ? data.slice(0, 3) : data,
+      };
+      return Response.json(summary);
+    } catch (e) {
+      return Response.json({ daysAgo, error: String(e.message || e) }, { status: 500 });
+    }
+  }
+
   const start = url.searchParams.get('start');
   if (!start || !/^\d{4}-\d{2}-\d{2}$/.test(start)) {
-    return Response.json({ error: 'Pass ?start=YYYY-MM-DD (e.g. 2026-03-26)' }, { status: 400 });
+    return Response.json({ error: 'Pass ?start=YYYY-MM-DD (e.g. 2026-03-26) or ?debug=N to inspect a single day' }, { status: 400 });
   }
 
   const supaUrl = getEnv('SUPABASE_URL');
