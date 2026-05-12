@@ -11,6 +11,7 @@ import {
   gatherTeamContext, buildTeamPrompt,
   gatherLeagueContext, buildLeaguePrompt,
   callClaude, supabaseUpsert, getEnv,
+  fetchAndStorePlayoffOdds,
 } from '../lib/pulse-shared.mjs';
 
 export const config = {
@@ -38,6 +39,11 @@ export default async () => {
     .then(() => ({ ok: true }))
     .catch(e => { console.error('MLB pulse failed:', e); return { ok: false, error: e.message }; });
 
+  // Playoff odds snapshot (independent of pulses — runs even if Claude fails)
+  const oddsResult = await fetchAndStorePlayoffOdds(supaUrl, supaKey)
+    .then(r => ({ ok: true, ...r }))
+    .catch(e => { console.error('Playoff odds snapshot failed:', e); return { ok: false, error: e.message }; });
+
   const teams = teamResults.map((r, i) => ({
     teamId: TEAM_IDS[i],
     ok: r.status === 'fulfilled',
@@ -45,8 +51,8 @@ export default async () => {
   }));
 
   const okCount = teams.filter(t => t.ok).length;
-  console.log(`Pulse cron: ${okCount}/${TEAM_IDS.length} teams ok, mlb: ${mlbResult.ok ? 'ok' : 'failed'}`);
-  return Response.json({ teams, mlb: mlbResult });
+  console.log(`Pulse cron: ${okCount}/${TEAM_IDS.length} teams ok, mlb: ${mlbResult.ok ? 'ok' : 'failed'}, odds: ${oddsResult.ok ? 'ok' : 'failed'}`);
+  return Response.json({ teams, mlb: mlbResult, odds: oddsResult });
 };
 
 async function generateAndStoreTeamPulse(teamId, apiKey, supaUrl, supaKey) {

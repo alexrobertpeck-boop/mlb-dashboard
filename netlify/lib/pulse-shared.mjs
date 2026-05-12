@@ -15,6 +15,24 @@ export const TEAM_IDS = [
   133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 158,
 ];
 
+// Lookup by FanGraphs shortName / abbName → MLB team id
+export const TEAM_BY_SHORT = {
+  'Angels': 108, 'D-backs': 109, 'Orioles': 110, 'Red Sox': 111, 'Cubs': 112,
+  'Reds': 113, 'Guardians': 114, 'Rockies': 115, 'Tigers': 116, 'Astros': 117,
+  'Royals': 118, 'Dodgers': 119, 'Nationals': 120, 'Mets': 121, 'Athletics': 133,
+  'Pirates': 134, 'Padres': 135, 'Mariners': 136, 'Giants': 137, 'Cardinals': 138,
+  'Rays': 139, 'Rangers': 140, 'Blue Jays': 141, 'Twins': 142, 'Phillies': 143,
+  'Braves': 144, 'White Sox': 145, 'Marlins': 146, 'Yankees': 147, 'Brewers': 158,
+};
+export const TEAM_BY_ABBR = {
+  'LAA': 108, 'ARI': 109, 'BAL': 110, 'BOS': 111, 'CHC': 112, 'CIN': 113,
+  'CLE': 114, 'COL': 115, 'DET': 116, 'HOU': 117, 'KC':  118, 'LAD': 119,
+  'WSH': 120, 'NYM': 121, 'ATH': 133, 'OAK': 133, 'PIT': 134, 'SD':  135,
+  'SEA': 136, 'SF':  137, 'STL': 138, 'TB':  139, 'TEX': 140, 'TOR': 141,
+  'MIN': 142, 'PHI': 143, 'ATL': 144, 'CWS': 145, 'CHW': 145, 'MIA': 146,
+  'NYY': 147, 'MIL': 158,
+};
+
 export function isoDate(daysFromToday) {
   const d = new Date();
   d.setDate(d.getDate() + daysFromToday);
@@ -236,6 +254,47 @@ ${headlinesText}
 
 Write 2-3 short paragraphs, 100-160 words total. Conversational and opinionated, the kind of "did you see what happened last night" tone a friend would use over coffee. Don't try to cover everything — pick what's actually interesting and lean in. Start immediately with the most interesting hook; no preamble or title. Output plain prose only — no markdown formatting (no **bold**, no *italics*, no bullet points, no headers).`;
 }
+
+// ---------- FanGraphs Playoff Odds ----------
+
+const FANGRAPHS_ODDS_URL = 'https://www.fangraphs.com/api/playoff-odds/odds?dateDelta=&projectionMode=2&standingsType=lg';
+
+export async function fetchAndStorePlayoffOdds(supaUrl, supaKey) {
+  const res = await fetch(FANGRAPHS_ODDS_URL);
+  if (!res.ok) throw new Error(`FanGraphs ${res.status}`);
+  const data = await res.json();
+  if (!Array.isArray(data)) throw new Error('FanGraphs returned non-array');
+
+  const today = isoDate(0);
+  const rows = [];
+  for (const t of data) {
+    const teamId = TEAM_BY_SHORT[t.shortName] || TEAM_BY_ABBR[t.abbName];
+    if (!teamId) {
+      console.warn(`Skipping unmapped FanGraphs team: ${t.shortName || t.abbName}`);
+      continue;
+    }
+    const e = t.endData || {};
+    rows.push({
+      team_id: teamId,
+      snapshot_date: today,
+      expected_wins: round(e.ExpW),
+      expected_losses: round(e.ExpL),
+      playoff_pct: clamp01(e.poffTitle),
+      division_pct: clamp01(e.divTitle),
+      wildcard_pct: clamp01(e.wcTitle),
+      ws_pct: clamp01(e.wsWin),
+    });
+  }
+
+  if (!rows.length) throw new Error('No FanGraphs rows mapped');
+
+  // Single bulk upsert (PostgREST supports array bodies for upsert)
+  await supabaseUpsert(supaUrl, supaKey, 'playoff_odds', rows);
+  return { written: rows.length };
+}
+
+function round(v) { return v == null ? null : Math.round(Number(v) * 100) / 100; }
+function clamp01(v) { if (v == null) return null; const n = Number(v); return isNaN(n) ? null : Math.max(0, Math.min(1, n)); }
 
 // ---------- Claude + Supabase ----------
 

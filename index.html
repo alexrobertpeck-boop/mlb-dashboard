@@ -483,6 +483,29 @@
     text-align: center;
   }
   .odds-projection strong { color: var(--team-primary); }
+  .odds-chart-wrap {
+    margin-top: 22px;
+    padding: 18px 4px 12px;
+    background: #fafafa;
+    border: 1px solid #ececec;
+    border-radius: 10px;
+  }
+  .odds-chart-title {
+    text-align: center;
+    font-size: 0.78em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+    color: #777;
+    margin-bottom: 8px;
+  }
+  .odds-chart svg { display: block; width: 100%; height: auto; }
+  .odds-chart-empty {
+    text-align: center;
+    color: #999;
+    font-size: 0.85em;
+    padding: 24px 8px;
+  }
 
   /* ─── Standings tables ─── */
   .standings-grid, .stat-pair {
@@ -3123,20 +3146,31 @@ async function loadStandings() {
 /* ─── Playoff odds ─── */
 
 async function loadPlayoffOdds() {
-  const data = await fetchJSON('https://www.fangraphs.com/api/playoff-odds/odds?dateDelta=&projectionMode=2&standingsType=lg');
-  const team = data.find(t => t.shortName === currentTeam.short || t.abbName === currentTeam.abbr);
-  if (!team) throw new Error(`${currentTeam.name} not found in odds data`);
-
-  const e = team.endData;
-  const fmt = (v) => (v * 100 < 0.05 ? '< 0.1' : (v * 100).toFixed(1)) + '%';
-
-  const expW = Math.round(e.ExpW);
-  const expL = Math.round(e.ExpL);
-  const expPct = expW / (expW + expL);
-  const divLabel = cachedDivisionName ? `Win ${cachedDivisionName}` : 'Win Division';
+  const { data: history, error } = await sb.from('playoff_odds')
+    .select('snapshot_date, expected_wins, expected_losses, playoff_pct, division_pct, wildcard_pct, ws_pct')
+    .eq('team_id', currentTeamId)
+    .order('snapshot_date', { ascending: true });
 
   const el = document.getElementById('playoff-odds');
   el.classList.remove('loading');
+
+  if (error) {
+    console.error('Playoff odds load failed:', error);
+    el.innerHTML = '<div class="error">Couldn\'t load playoff odds.</div>';
+    return;
+  }
+  if (!history || history.length === 0) {
+    el.innerHTML = '<div class="empty-note">Playoff odds haven\'t been snapshotted yet — check back tomorrow.</div>';
+    return;
+  }
+
+  const latest = history[history.length - 1];
+  const fmt = (v) => (v == null ? '—' : (v * 100 < 0.05 ? '< 0.1' : (v * 100).toFixed(1)) + '%');
+  const expW = Math.round(latest.expected_wins ?? 0);
+  const expL = Math.round(latest.expected_losses ?? 0);
+  const expPct = (expW + expL) > 0 ? expW / (expW + expL) : 0;
+  const divLabel = cachedDivisionName ? `Win ${cachedDivisionName}` : 'Win Division';
+
   el.innerHTML = `
     <div class="projection-hero">
       <div class="projection-label">Projected Final Record</div>
@@ -3145,24 +3179,76 @@ async function loadPlayoffOdds() {
     </div>
     <div class="odds-grid">
       <div class="odds-card">
-        <div class="odds-value">${fmt(e.poffTitle)}</div>
+        <div class="odds-value">${fmt(latest.playoff_pct)}</div>
         <div class="odds-label">Make Playoffs</div>
       </div>
       <div class="odds-card">
-        <div class="odds-value">${fmt(e.divTitle)}</div>
+        <div class="odds-value">${fmt(latest.division_pct)}</div>
         <div class="odds-label">${divLabel}</div>
       </div>
       <div class="odds-card">
-        <div class="odds-value">${fmt(e.wcTitle)}</div>
+        <div class="odds-value">${fmt(latest.wildcard_pct)}</div>
         <div class="odds-label">Wild Card</div>
       </div>
       <div class="odds-card">
-        <div class="odds-value">${fmt(e.wsWin)}</div>
+        <div class="odds-value">${fmt(latest.ws_pct)}</div>
         <div class="odds-label">Win World Series</div>
       </div>
     </div>
-    <div class="odds-projection">Source: FanGraphs (ZiPS + Steamer composite)</div>
+    ${renderOddsChart(history)}
+    <div class="odds-projection">Source: FanGraphs (ZiPS + Steamer composite). Snapshot taken daily.</div>
   `;
+}
+
+function renderOddsChart(history) {
+  if (!history || history.length < 2) {
+    return `<div class="odds-chart-wrap">
+      <div class="odds-chart-title">Playoff Odds Over Time</div>
+      <div class="odds-chart-empty">Need at least two daily snapshots to chart — keep checking back.</div>
+    </div>`;
+  }
+
+  const W = 800, H = 220, PAD_L = 44, PAD_R = 14, PAD_T = 16, PAD_B = 30;
+  const innerW = W - PAD_L - PAD_R;
+  const innerH = H - PAD_T - PAD_B;
+
+  const xs = history.map(h => new Date(h.snapshot_date + 'T12:00:00').getTime());
+  const minX = xs[0], maxX = xs[xs.length - 1];
+  const xRange = maxX - minX || 1;
+  const xScale = t => PAD_L + ((t - minX) / xRange) * innerW;
+  const yScale = p => PAD_T + (1 - p) * innerH;
+
+  const gridYs = [0, 0.25, 0.5, 0.75, 1];
+  const gridLines = gridYs.map(y =>
+    `<line x1="${PAD_L}" y1="${yScale(y).toFixed(1)}" x2="${W - PAD_R}" y2="${yScale(y).toFixed(1)}" stroke="${y === 0.5 ? '#ddd' : '#eee'}" stroke-width="1"/>`
+  ).join('');
+  const gridLabels = gridYs.map(y =>
+    `<text x="${PAD_L - 6}" y="${(yScale(y) + 3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="#888">${Math.round(y*100)}%</text>`
+  ).join('');
+
+  const points = history.map(h => `${xScale(new Date(h.snapshot_date + 'T12:00:00').getTime()).toFixed(1)},${yScale(h.playoff_pct ?? 0).toFixed(1)}`).join(' ');
+
+  const last = history[history.length - 1];
+  const lastX = xScale(new Date(last.snapshot_date + 'T12:00:00').getTime()).toFixed(1);
+  const lastY = yScale(last.playoff_pct ?? 0).toFixed(1);
+
+  const fmtDate = iso => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const xStartLabel = fmtDate(history[0].snapshot_date);
+  const xEndLabel = fmtDate(history[history.length - 1].snapshot_date);
+
+  return `<div class="odds-chart-wrap">
+    <div class="odds-chart-title">Playoff Odds Over Time</div>
+    <div class="odds-chart">
+      <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+        ${gridLines}
+        ${gridLabels}
+        <polyline fill="none" stroke="var(--team-primary)" stroke-width="2.5" stroke-linejoin="round" points="${points}"/>
+        <circle cx="${lastX}" cy="${lastY}" r="4.5" fill="var(--team-primary)" stroke="#fff" stroke-width="1.5"/>
+        <text x="${PAD_L}" y="${H - 10}" font-size="11" fill="#888">${xStartLabel}</text>
+        <text x="${W - PAD_R}" y="${H - 10}" font-size="11" fill="#888" text-anchor="end">${xEndLabel}</text>
+      </svg>
+    </div>
+  </div>`;
 }
 
 /* ─── Around MLB overview (top of landing) ─── */
@@ -3230,10 +3316,15 @@ const loadLeaguePitching = () => loadLeagueLeaders('league-pitching', 'pitching'
 
 async function loadMlbOverview() {
   const season = new Date().getFullYear();
-  const [standingsData, oddsData] = await Promise.all([
+  // Latest playoff-odds snapshot per team. The DB has one row per team per day;
+  // we pull the most recent date and filter to it for the WS-picks ranking.
+  const [standingsData, oddsRes] = await Promise.all([
     fetchJSON(`${API_BASE}/standings?leagueId=103,104&season=${season}`),
-    fetchJSON('https://www.fangraphs.com/api/playoff-odds/odds?dateDelta=&projectionMode=2&standingsType=lg').catch(() => []),
+    sb.from('playoff_odds').select('team_id, snapshot_date, ws_pct').order('snapshot_date', { ascending: false }).limit(60),
   ]);
+  const allOdds = oddsRes?.data || [];
+  const latestDate = allOdds[0]?.snapshot_date;
+  const oddsData = latestDate ? allOdds.filter(r => r.snapshot_date === latestDate) : [];
 
   // Flatten teams from standings
   const teams = [];
@@ -3261,16 +3352,12 @@ async function loadMlbOverview() {
   const longestWin  = teams.filter(t => t.streakType === 'wins').sort(sortByStreak)[0];
   const longestLoss = teams.filter(t => t.streakType === 'losses').sort(sortByStreak)[0];
 
-  // FanGraphs WS picks
-  const teamsByShort = {};
-  for (const [id, t] of Object.entries(TEAMS)) teamsByShort[t.short] = parseInt(id, 10);
-  const wsPicks = (Array.isArray(oddsData) ? oddsData : [])
-    .map(t => ({
-      shortName: t.shortName,
-      mlbId: teamsByShort[t.shortName],
-      wsPct: t.endData?.wsWin ?? 0,
+  // World Series picks: top 3 by ws_pct from latest snapshot
+  const wsPicks = oddsData
+    .map(r => ({
+      mlbId: r.team_id,
+      wsPct: r.ws_pct ?? 0,
     }))
-    .filter(p => p.mlbId)
     .sort((a, b) => b.wsPct - a.wsPct)
     .slice(0, 3);
 
