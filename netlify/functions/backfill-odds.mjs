@@ -102,7 +102,8 @@ async function processOneDay(daysAgo, supaUrl, supaKey) {
   const snapshot_date = snap.toISOString().split('T')[0];
 
   try {
-    const data = await fetchFanGraphsOdds(daysAgo);
+    // dateEnd=YYYY-MM-DD is the param that actually returns historical odds
+    const data = await fetchFanGraphsOdds(snapshot_date);
     const rows = data.map(t => fanGraphsRowToDbRow(t, snapshot_date)).filter(Boolean);
     if (!rows.length) return { daysAgo, snapshot_date, ok: false, error: 'no rows mapped' };
     await supabaseUpsert(supaUrl, supaKey, 'playoff_odds', rows);

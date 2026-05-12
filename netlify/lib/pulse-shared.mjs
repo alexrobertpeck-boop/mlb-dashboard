@@ -275,10 +275,14 @@ export function fanGraphsRowToDbRow(t, snapshotDate) {
   };
 }
 
-// dateDelta = 0 means today, 1 means yesterday, etc.
-export async function fetchFanGraphsOdds(dateDelta = 0) {
-  const param = dateDelta ? String(dateDelta) : '';
-  const res = await fetch(`${FANGRAPHS_ODDS_URL}?dateDelta=${param}&projectionMode=2&standingsType=lg`);
+// Pass dateStr=YYYY-MM-DD for a historical snapshot (FanGraphs supports
+// this via the `dateEnd` param), or leave null/undefined for the live "today"
+// numbers.
+export async function fetchFanGraphsOdds(dateStr = null) {
+  const params = dateStr
+    ? `?dateEnd=${dateStr}&projectionMode=2&standingsType=lg`
+    : `?dateDelta=&projectionMode=2&standingsType=lg`;
+  const res = await fetch(`${FANGRAPHS_ODDS_URL}${params}`);
   if (!res.ok) throw new Error(`FanGraphs ${res.status}`);
   const data = await res.json();
   if (!Array.isArray(data)) throw new Error('FanGraphs returned non-array');
@@ -286,7 +290,7 @@ export async function fetchFanGraphsOdds(dateDelta = 0) {
 }
 
 export async function fetchAndStorePlayoffOdds(supaUrl, supaKey) {
-  const data = await fetchFanGraphsOdds(0);
+  const data = await fetchFanGraphsOdds(null);
   const today = isoDate(0);
   const rows = data.map(t => fanGraphsRowToDbRow(t, today)).filter(Boolean);
   if (!rows.length) throw new Error('No FanGraphs rows mapped');
