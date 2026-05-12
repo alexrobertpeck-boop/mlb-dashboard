@@ -14,24 +14,46 @@ const BATCH_SIZE = 5; // 5 concurrent FanGraphs fetches at a time — polite-ish
 export default async (req) => {
   const url = new URL(req.url);
 
-  // Debug mode: ?debug=N returns the raw FanGraphs response shape for
-  // dateDelta=N, so we can inspect why mapping is failing.
+  // Debug mode: ?debug=N tries several URL patterns FanGraphs may support
+  // for historical odds and reports which (if any) yields data.
   const debug = url.searchParams.get('debug');
   if (debug !== null) {
-    const daysAgo = parseInt(debug, 10) || 0;
-    try {
-      const data = await fetchFanGraphsOdds(daysAgo);
-      const summary = {
-        daysAgo,
-        type: Array.isArray(data) ? 'array' : typeof data,
-        length: Array.isArray(data) ? data.length : null,
-        sampleKeys: Array.isArray(data) && data[0] ? Object.keys(data[0]).slice(0, 30) : null,
-        firstThree: Array.isArray(data) ? data.slice(0, 3) : data,
-      };
-      return Response.json(summary);
-    } catch (e) {
-      return Response.json({ daysAgo, error: String(e.message || e) }, { status: 500 });
+    const daysAgo = parseInt(debug, 10) || 1;
+    const d = new Date();
+    d.setUTCHours(12, 0, 0, 0);
+    d.setUTCDate(d.getUTCDate() - daysAgo);
+    const dateStr = d.toISOString().split('T')[0];
+
+    const patterns = [
+      { name: 'dateDelta',  url: `https://www.fangraphs.com/api/playoff-odds/odds?dateDelta=${daysAgo}&projectionMode=2&standingsType=lg` },
+      { name: 'date',       url: `https://www.fangraphs.com/api/playoff-odds/odds?date=${dateStr}&projectionMode=2&standingsType=lg` },
+      { name: 'dateEnd',    url: `https://www.fangraphs.com/api/playoff-odds/odds?dateEnd=${dateStr}&projectionMode=2&standingsType=lg` },
+      { name: 'dateBeg',    url: `https://www.fangraphs.com/api/playoff-odds/odds?dateBeg=${dateStr}&projectionMode=2&standingsType=lg` },
+      { name: 'graph-team', url: `https://www.fangraphs.com/api/playoff-odds/odds-graph?team=22&season=${new Date().getFullYear()}&type=2` },
+    ];
+
+    const results = [];
+    for (const p of patterns) {
+      try {
+        const r = await fetch(p.url);
+        const text = await r.text();
+        let parsed;
+        try { parsed = JSON.parse(text); } catch {}
+        results.push({
+          name: p.name,
+          url: p.url,
+          status: r.status,
+          isArray: Array.isArray(parsed),
+          length: Array.isArray(parsed) ? parsed.length : (parsed && typeof parsed === 'object' ? Object.keys(parsed).length : null),
+          firstTeamSample: Array.isArray(parsed) && parsed[0] ? { W: parsed[0].W, L: parsed[0].L, poffTitle: parsed[0].endData?.poffTitle } : null,
+          rawPreview: text.slice(0, 280),
+        });
+      } catch (e) {
+        results.push({ name: p.name, error: String(e.message || e) });
+      }
     }
+
+    return Response.json({ daysAgo, dateStr, attempts: results });
   }
 
   const start = url.searchParams.get('start');
