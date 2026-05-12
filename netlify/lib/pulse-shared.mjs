@@ -257,38 +257,39 @@ Write 2-3 short paragraphs, 100-160 words total. Conversational and opinionated,
 
 // ---------- FanGraphs Playoff Odds ----------
 
-const FANGRAPHS_ODDS_URL = 'https://www.fangraphs.com/api/playoff-odds/odds?dateDelta=&projectionMode=2&standingsType=lg';
+const FANGRAPHS_ODDS_URL = 'https://www.fangraphs.com/api/playoff-odds/odds';
 
-export async function fetchAndStorePlayoffOdds(supaUrl, supaKey) {
-  const res = await fetch(FANGRAPHS_ODDS_URL);
+export function fanGraphsRowToDbRow(t, snapshotDate) {
+  const teamId = TEAM_BY_SHORT[t.shortName] || TEAM_BY_ABBR[t.abbName];
+  if (!teamId) return null;
+  const e = t.endData || {};
+  return {
+    team_id: teamId,
+    snapshot_date: snapshotDate,
+    expected_wins: round(e.ExpW),
+    expected_losses: round(e.ExpL),
+    playoff_pct: clamp01(e.poffTitle),
+    division_pct: clamp01(e.divTitle),
+    wildcard_pct: clamp01(e.wcTitle),
+    ws_pct: clamp01(e.wsWin),
+  };
+}
+
+// dateDelta = 0 means today, 1 means yesterday, etc.
+export async function fetchFanGraphsOdds(dateDelta = 0) {
+  const param = dateDelta ? String(dateDelta) : '';
+  const res = await fetch(`${FANGRAPHS_ODDS_URL}?dateDelta=${param}&projectionMode=2&standingsType=lg`);
   if (!res.ok) throw new Error(`FanGraphs ${res.status}`);
   const data = await res.json();
   if (!Array.isArray(data)) throw new Error('FanGraphs returned non-array');
+  return data;
+}
 
+export async function fetchAndStorePlayoffOdds(supaUrl, supaKey) {
+  const data = await fetchFanGraphsOdds(0);
   const today = isoDate(0);
-  const rows = [];
-  for (const t of data) {
-    const teamId = TEAM_BY_SHORT[t.shortName] || TEAM_BY_ABBR[t.abbName];
-    if (!teamId) {
-      console.warn(`Skipping unmapped FanGraphs team: ${t.shortName || t.abbName}`);
-      continue;
-    }
-    const e = t.endData || {};
-    rows.push({
-      team_id: teamId,
-      snapshot_date: today,
-      expected_wins: round(e.ExpW),
-      expected_losses: round(e.ExpL),
-      playoff_pct: clamp01(e.poffTitle),
-      division_pct: clamp01(e.divTitle),
-      wildcard_pct: clamp01(e.wcTitle),
-      ws_pct: clamp01(e.wsWin),
-    });
-  }
-
+  const rows = data.map(t => fanGraphsRowToDbRow(t, today)).filter(Boolean);
   if (!rows.length) throw new Error('No FanGraphs rows mapped');
-
-  // Single bulk upsert (PostgREST supports array bodies for upsert)
   await supabaseUpsert(supaUrl, supaKey, 'playoff_odds', rows);
   return { written: rows.length };
 }
