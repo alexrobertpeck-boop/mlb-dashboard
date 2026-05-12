@@ -499,6 +499,7 @@
     color: #777;
     margin-bottom: 8px;
   }
+  .odds-chart { position: relative; }
   .odds-chart svg { display: block; width: 100%; height: auto; }
   .odds-chart-empty {
     text-align: center;
@@ -506,6 +507,30 @@
     font-size: 0.85em;
     padding: 24px 8px;
   }
+  .odds-chart-point {
+    fill: var(--team-primary);
+    fill-opacity: 0;
+    cursor: pointer;
+    transition: fill-opacity 0.1s ease, r 0.15s ease;
+  }
+  .odds-chart-point:hover {
+    fill-opacity: 1;
+  }
+  .odds-chart-tooltip {
+    position: absolute;
+    background: #2a2a2a;
+    color: white;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.4;
+    pointer-events: none;
+    transform: translate(-50%, calc(-100% - 10px));
+    white-space: nowrap;
+    z-index: 20;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+  .odds-chart-tooltip strong { display: block; font-weight: 700; }
 
   /* ─── Standings tables ─── */
   .standings-grid, .stat-pair {
@@ -3198,6 +3223,7 @@ async function loadPlayoffOdds() {
     ${renderOddsChart(history)}
     <div class="odds-projection">Source: FanGraphs (ZiPS + Steamer composite). Snapshot taken daily.</div>
   `;
+  attachOddsChartTooltips(el);
 }
 
 function renderOddsChart(history) {
@@ -3226,11 +3252,18 @@ function renderOddsChart(history) {
     `<text x="${PAD_L - 6}" y="${(yScale(y) + 3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="#888">${Math.round(y*100)}%</text>`
   ).join('');
 
-  const points = history.map(h => `${xScale(new Date(h.snapshot_date + 'T12:00:00').getTime()).toFixed(1)},${yScale(h.playoff_pct ?? 0).toFixed(1)}`).join(' ');
+  const pointData = history.map(h => ({
+    x: xScale(new Date(h.snapshot_date + 'T12:00:00').getTime()),
+    y: yScale(h.playoff_pct ?? 0),
+    date: h.snapshot_date,
+    pct: h.playoff_pct ?? 0,
+  }));
+  const polylinePoints = pointData.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const hoverCircles = pointData.map(p =>
+    `<circle class="odds-chart-point" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="6" data-date="${p.date}" data-pct="${p.pct}"/>`
+  ).join('');
 
-  const last = history[history.length - 1];
-  const lastX = xScale(new Date(last.snapshot_date + 'T12:00:00').getTime()).toFixed(1);
-  const lastY = yScale(last.playoff_pct ?? 0).toFixed(1);
+  const last = pointData[pointData.length - 1];
 
   const fmtDate = iso => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   const xStartLabel = fmtDate(history[0].snapshot_date);
@@ -3242,13 +3275,42 @@ function renderOddsChart(history) {
       <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
         ${gridLines}
         ${gridLabels}
-        <polyline fill="none" stroke="var(--team-primary)" stroke-width="2.5" stroke-linejoin="round" points="${points}"/>
-        <circle cx="${lastX}" cy="${lastY}" r="4.5" fill="var(--team-primary)" stroke="#fff" stroke-width="1.5"/>
+        <polyline fill="none" stroke="var(--team-primary)" stroke-width="2.5" stroke-linejoin="round" points="${polylinePoints}"/>
+        <circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="4.5" fill="var(--team-primary)" stroke="#fff" stroke-width="1.5" pointer-events="none"/>
+        ${hoverCircles}
         <text x="${PAD_L}" y="${H - 10}" font-size="11" fill="#888">${xStartLabel}</text>
         <text x="${W - PAD_R}" y="${H - 10}" font-size="11" fill="#888" text-anchor="end">${xEndLabel}</text>
       </svg>
+      <div class="odds-chart-tooltip" hidden></div>
     </div>
   </div>`;
+}
+
+function attachOddsChartTooltips(container) {
+  const chart = container.querySelector('.odds-chart');
+  if (!chart) return;
+  const tooltip = chart.querySelector('.odds-chart-tooltip');
+  const svg = chart.querySelector('svg');
+  if (!tooltip || !svg) return;
+  const viewBox = svg.viewBox.baseVal;
+
+  chart.querySelectorAll('.odds-chart-point').forEach(pt => {
+    pt.addEventListener('mouseenter', () => {
+      const date = pt.dataset.date;
+      const pct = parseFloat(pt.dataset.pct);
+      const dateStr = new Date(date + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      const pctStr = (pct * 100 < 0.05 ? '< 0.1' : (pct * 100).toFixed(1)) + '%';
+      tooltip.innerHTML = `<strong>${escapeHtml(dateStr)}</strong>${escapeHtml(pctStr)} playoff odds`;
+      const cx = parseFloat(pt.getAttribute('cx'));
+      const cy = parseFloat(pt.getAttribute('cy'));
+      const w = svg.clientWidth || svg.getBoundingClientRect().width;
+      const h = svg.clientHeight || svg.getBoundingClientRect().height;
+      tooltip.style.left = `${(cx / viewBox.width) * w}px`;
+      tooltip.style.top = `${(cy / viewBox.height) * h}px`;
+      tooltip.hidden = false;
+    });
+    pt.addEventListener('mouseleave', () => { tooltip.hidden = true; });
+  });
 }
 
 /* ─── Around MLB overview (top of landing) ─── */
