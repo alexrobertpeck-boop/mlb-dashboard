@@ -19,7 +19,32 @@ export const config = {
   schedule: '0 10,22 * * *',
 };
 
-export default async () => {
+export default async (req) => {
+  // ?debug=seatgeek returns the raw SeatGeek response for one team, no writes.
+  // Used to inspect the response shape when the normal cron writes 0 events.
+  try {
+    const url = new URL(req.url);
+    if (url.searchParams.get('debug') === 'seatgeek') {
+      const clientId = getEnv('SEATGEEK_CLIENT_ID');
+      if (!clientId) return Response.json({ error: 'SEATGEEK_CLIENT_ID not set' }, { status: 500 });
+      const slug = url.searchParams.get('slug') || 'mlb-colorado-rockies';
+      const today = new Date().toISOString().split('T')[0];
+      const res = await fetch(`https://api.seatgeek.com/2/events?performers.slug=${slug}&client_id=${clientId}&datetime_local.gte=${today}&per_page=3&type=mlb`);
+      const text = await res.text();
+      let parsed;
+      try { parsed = JSON.parse(text); } catch {}
+      return Response.json({
+        status: res.status,
+        slug,
+        totalEvents: parsed?.events?.length ?? null,
+        firstTwoEvents: parsed?.events?.slice(0, 2) ?? null,
+        rawPreview: text.slice(0, 500),
+      });
+    }
+  } catch (e) {
+    return Response.json({ debugError: String(e.message || e) }, { status: 500 });
+  }
+
   const apiKey = getEnv('ANTHROPIC_API_KEY');
   const supaUrl = getEnv('SUPABASE_URL');
   const supaKey = getEnv('SUPABASE_SERVICE_ROLE_KEY');
