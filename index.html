@@ -564,19 +564,38 @@
   }
   .user-teams-logo img { width: 28px; height: 28px; object-fit: contain; }
 
-  /* Friend matchups (on landing) */
-  .matchup-card {
-    display: grid;
-    grid-template-columns: 90px 1fr;
-    align-items: center;
-    gap: 16px;
-    padding: 12px 16px;
+  /* Friend matchups (on landing) — grouped by friend */
+  .matchup-friend-block {
     background: #fafafa;
     border: 1px solid #ececec;
-    border-radius: 10px;
     border-left: 4px solid #002D72;
+    border-radius: 10px;
+    padding: 14px 18px;
   }
-  .matchup-card + .matchup-card { margin-top: 10px; }
+  .matchup-friend-block + .matchup-friend-block { margin-top: 12px; }
+  .matchup-friend-header {
+    font-size: 1.05em;
+    font-weight: 700;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #ececec;
+  }
+  .matchup-friend-header a {
+    color: #002D72;
+    text-decoration: none;
+  }
+  .matchup-friend-header a:hover { text-decoration: underline; }
+  .matchup-games {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .matchup-game-row {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    align-items: center;
+    gap: 14px;
+  }
   .matchup-date {
     font-size: 0.78em;
     text-transform: uppercase;
@@ -592,27 +611,16 @@
   }
   .matchup-game img { width: 28px; height: 28px; object-fit: contain; }
   .matchup-game .vs { color: #888; font-weight: 400; margin: 0 4px; }
-  .matchup-friends {
-    grid-column: 2;
-    font-size: 0.88em;
-    color: #555;
-  }
-  .matchup-friends a {
-    color: #002D72;
-    text-decoration: none;
-    font-weight: 600;
-  }
-  .matchup-friends a:hover { text-decoration: underline; }
   .matchup-tag {
     font-size: 0.75em;
     color: #888;
-    margin-left: 3px;
+    margin-left: 6px;
+    font-weight: 600;
   }
-  .matchup-tag.main  { color: #2e7d32; font-weight: 600; }
-  .matchup-tag.rival { color: #c62828; font-weight: 600; }
+  .matchup-tag.main  { color: #2e7d32; }
+  .matchup-tag.rival { color: #c62828; }
   @media (max-width: 600px) {
-    .matchup-card { grid-template-columns: 1fr; }
-    .matchup-friends { grid-column: 1; }
+    .matchup-game-row { grid-template-columns: 1fr; gap: 4px; }
   }
 
   /* Cracker jacks prompt on friend profile */
@@ -733,6 +741,22 @@
     background: #f1f8e9;
     border-color: #aed581;
     color: #2e7d32;
+  }
+
+  /* Popcorn falling animation when unread cracker jacks are waiting */
+  .popcorn-fall {
+    position: fixed;
+    pointer-events: none;
+    font-size: 18px;
+    z-index: 9998;
+    user-select: none;
+    will-change: transform, opacity;
+    animation: popcornFall 1.8s cubic-bezier(.45,.05,.55,.95) forwards;
+  }
+  @keyframes popcornFall {
+    0%   { transform: translate(0, -4px) rotate(0deg); opacity: 0; }
+    10%  { opacity: 1; }
+    100% { transform: translate(var(--drift, 0), 180px) rotate(var(--spin, 360deg)); opacity: 0; }
   }
   .pitcher {
     font-size: 0.68em;
@@ -5613,6 +5637,30 @@ function renderNotificationsBadge() {
   }
 }
 
+// Drops a small shower of popcorn emojis from the notifications icon. Called
+// once on page boot when there are unread cracker jacks waiting.
+function spawnPopcornShower() {
+  const btn = document.getElementById('notifications-btn');
+  if (!btn) return;
+  const rect = btn.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.bottom;
+  const count = Math.min(6, 3 + unreadInteractionsCount);
+  for (let i = 0; i < count; i++) {
+    setTimeout(() => {
+      const p = document.createElement('div');
+      p.className = 'popcorn-fall';
+      p.textContent = '🍿';
+      p.style.left = `${cx + (Math.random() - 0.5) * 30 - 9}px`;
+      p.style.top  = `${cy + 2}px`;
+      p.style.setProperty('--drift', `${(Math.random() - 0.5) * 60}px`);
+      p.style.setProperty('--spin', `${(Math.random() - 0.5) * 540}deg`);
+      document.body.appendChild(p);
+      setTimeout(() => p.remove(), 1900);
+    }, i * 160);
+  }
+}
+
 async function getFriendRecentLoss(teamId) {
   // Most-recent loss in the last 3 days
   try {
@@ -5759,6 +5807,23 @@ async function openNotificationsModal() {
     for (const p of (senderProfiles || [])) profileById[p.user_id] = p;
   }
 
+  // Look up game details for any received cracker jacks with a context_game_pk
+  const gamePks = [...new Set(received.map(r => r.context_game_pk).filter(Boolean))];
+  const gameByPk = {};
+  if (gamePks.length) {
+    try {
+      const data = await fetchJSON(`${API_BASE}/schedule?sportId=1&gamePks=${gamePks.join(',')}`);
+      const games = (data.dates || []).flatMap(d => d.games);
+      for (const g of games) {
+        gameByPk[g.gamePk] = {
+          home: { id: g.teams.home.team.id, score: g.teams.home.score, name: g.teams.home.team.name },
+          away: { id: g.teams.away.team.id, score: g.teams.away.score, name: g.teams.away.team.name },
+          date: g.officialDate || (g.gameDate || '').slice(0, 10),
+        };
+      }
+    } catch (e) { console.error('Game lookup failed:', e); }
+  }
+
   // ---- Render ----
   el.classList.remove('loading');
 
@@ -5787,11 +5852,28 @@ async function openNotificationsModal() {
     ? `<div class="notification-section-label">Received</div>` +
       received.map(r => {
         const sender = profileById[r.from_user] || { username: '?', display_name: 'Unknown' };
-        const teamName = r.context_team_id ? (TEAMS[r.context_team_id]?.short || 'their team') : 'their team';
         const senderLink = `<a href="/?user=${encodeURIComponent(sender.username)}">${escapeHtml(sender.display_name || sender.username)}</a>`;
-        const body = r.kind === 'cracker_jacks'
-          ? `${senderLink} threw cracker jacks after the ${escapeHtml(teamName)} lost.`
-          : `${senderLink} sent you something.`;
+        let body;
+        if (r.kind === 'cracker_jacks') {
+          const game = gameByPk[r.context_game_pk];
+          if (game && r.context_team_id) {
+            const isHome = game.home.id === r.context_team_id;
+            const myScore = isHome ? game.home.score : game.away.score;
+            const oppScore = isHome ? game.away.score : game.home.score;
+            const opp = isHome ? game.away : game.home;
+            const teamName = TEAMS[r.context_team_id]?.short || 'team';
+            const oppName = TEAMS[opp.id]?.short || opp.name;
+            const dateStr = game.date
+              ? new Date(game.date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+              : '';
+            body = `${senderLink} threw cracker jacks after the <strong>${escapeHtml(teamName)} lost ${myScore}–${oppScore}</strong> to the ${escapeHtml(oppName)}${dateStr ? ` on ${dateStr}` : ''}.`;
+          } else {
+            const teamName = r.context_team_id ? (TEAMS[r.context_team_id]?.short || 'their team') : 'their team';
+            body = `${senderLink} threw cracker jacks after the ${escapeHtml(teamName)} lost.`;
+          }
+        } else {
+          body = `${senderLink} sent you something.`;
+        }
         return `<div class="notification-row ${r.read_at ? '' : 'unread'}">
           <div class="notification-icon">🍿</div>
           <div class="notification-body">
@@ -5905,29 +5987,53 @@ async function loadFriendMatchups() {
     return;
   }
 
-  el.innerHTML = matchups.map(m => {
-    const dateLabel = new Date(m.date + 'T12:00:00').toLocaleDateString(undefined, {
-      weekday: 'short', month: 'short', day: 'numeric',
-    });
-    const oppTeam = TEAMS[m.oppId];
-    const oppName = escapeHtml(oppTeam?.short || 'Opponent');
-    const myName = escapeHtml(mainTeam?.short || 'You');
-    const matchupLine = m.isHome
-      ? `${myName} <span class="vs">vs</span> ${oppName}`
-      : `${myName} <span class="vs">@</span> ${oppName}`;
-    const friendsLine = m.friends.map(f => {
-      const tag = f.role === 'main' ? '<span class="matchup-tag main">main</span>'
-                : f.role === 'rival' ? '<span class="matchup-tag rival">rival</span>'
-                : '<span class="matchup-tag">follows</span>';
-      return `<a href="/?user=${encodeURIComponent(f.username)}">${escapeHtml(f.display_name || f.username)}</a> ${tag}`;
-    }).join(', ');
-    return `<div class="matchup-card">
-      <div class="matchup-date">${dateLabel}</div>
-      <div class="matchup-game">
-        <img src="https://www.mlbstatic.com/team-logos/${m.oppId}.svg" alt="${escapeHtml(oppTeam?.abbr || '')}" onerror="this.style.visibility='hidden'">
-        <span>${matchupLine}</span>
+  // Group matchups by friend (a single game can appear under multiple friends
+  // if more than one follows the opposing team)
+  const byFriend = new Map(); // friend_user_id → { profile, role, games[] }
+  for (const m of matchups) {
+    for (const f of m.friends) {
+      if (!byFriend.has(f.user_id)) {
+        byFriend.set(f.user_id, { profile: f, role: f.role, games: [] });
+      }
+      // Keep the strongest role per friend (main > rival > interested)
+      const entry = byFriend.get(f.user_id);
+      const order = { main: 0, rival: 1, interested: 2 };
+      if ((order[f.role] ?? 2) < (order[entry.role] ?? 2)) entry.role = f.role;
+      entry.games.push(m);
+    }
+  }
+
+  const myName = escapeHtml(mainTeam?.short || 'You');
+  el.innerHTML = [...byFriend.values()].map(entry => {
+    const { profile, role, games } = entry;
+    const roleTag = role === 'main' ? '<span class="matchup-tag main">main</span>'
+                  : role === 'rival' ? '<span class="matchup-tag rival">rival</span>'
+                  : '<span class="matchup-tag">follows</span>';
+    const friendLink = `<a href="/?user=${encodeURIComponent(profile.username)}">${escapeHtml(profile.display_name || profile.username)}</a>`;
+
+    const gamesHtml = games.map(g => {
+      const dateLabel = new Date(g.date + 'T12:00:00').toLocaleDateString(undefined, {
+        weekday: 'short', month: 'short', day: 'numeric',
+      });
+      const oppTeam = TEAMS[g.oppId];
+      const oppName = escapeHtml(oppTeam?.short || 'Opponent');
+      const matchupLine = g.isHome
+        ? `${myName} <span class="vs">vs</span> ${oppName}`
+        : `${myName} <span class="vs">@</span> ${oppName}`;
+      return `<div class="matchup-game-row">
+        <div class="matchup-date">${dateLabel}</div>
+        <div class="matchup-game">
+          <img src="https://www.mlbstatic.com/team-logos/${g.oppId}.svg" alt="${escapeHtml(oppTeam?.abbr || '')}" onerror="this.style.visibility='hidden'">
+          <span>${matchupLine}</span>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div class="matchup-friend-block">
+      <div class="matchup-friend-header">
+        ${friendLink} ${roleTag}
       </div>
-      <div class="matchup-friends">${friendsLine}</div>
+      <div class="matchup-games">${gamesHtml}</div>
     </div>`;
   }).join('');
 }
@@ -6043,20 +6149,22 @@ async function loadUserProfile(username) {
   root.classList.remove('loading');
   root.innerHTML = `${headerHtml}
     ${crackerJacksHtml}
-    <div class="user-summary-row">
-      <div class="user-summary-card">
-        <div class="user-summary-label">Stadiums Visited</div>
-        <div class="user-summary-value">${derivedStadiums.size}<span class="denom"> / 30</span></div>
+    <section>
+      <div class="user-summary-row">
+        <div class="user-summary-card">
+          <div class="user-summary-label">Stadiums Visited</div>
+          <div class="user-summary-value">${derivedStadiums.size}<span class="denom"> / 30</span></div>
+        </div>
+        <div class="user-summary-card">
+          <div class="user-summary-label">Teams Seen</div>
+          <div class="user-summary-value">${derivedTeamsAll.size}<span class="denom"> / 30</span></div>
+        </div>
+        <div class="user-summary-card">
+          <div class="user-summary-label">Games Logged</div>
+          <div class="user-summary-value">${friendGames.length}</div>
+        </div>
       </div>
-      <div class="user-summary-card">
-        <div class="user-summary-label">Teams Seen</div>
-        <div class="user-summary-value">${derivedTeamsAll.size}<span class="denom"> / 30</span></div>
-      </div>
-      <div class="user-summary-card">
-        <div class="user-summary-label">Games Logged</div>
-        <div class="user-summary-value">${friendGames.length}</div>
-      </div>
-    </div>
+    </section>
 
     ${renderUserTeamsSection(teamsByRole)}
 
@@ -6414,6 +6522,10 @@ async function init() {
     try {
       unreadInteractionsCount = await loadUnreadInteractionsCount(user.id);
       renderNotificationsBadge();
+      if (unreadInteractionsCount > 0) {
+        // Small delay so the nav has rendered before we anchor the popcorn to it
+        setTimeout(spawnPopcornShower, 400);
+      }
     } catch (err) { console.error('Notifications count failed:', err); }
   }
 
