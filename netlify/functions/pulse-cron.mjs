@@ -46,12 +46,22 @@ export default async () => {
     .catch(e => { console.error('Playoff odds snapshot failed:', e); return { ok: false, error: e.message }; });
 
   // SeatGeek upcoming events (also independent — skip cleanly if no client id)
-  const seatgeekClientId = getEnv('SEATGEEK_CLIENT_ID');
+  const fromNetlify = (typeof Netlify !== 'undefined' && Netlify.env?.get('SEATGEEK_CLIENT_ID')) || null;
+  const fromProcess = process.env['SEATGEEK_CLIENT_ID'] || null;
+  const seatgeekClientId = fromNetlify || fromProcess;
   const seatgeekResult = seatgeekClientId
     ? await fetchAndStoreSeatGeekEvents(seatgeekClientId, supaUrl, supaKey)
         .then(r => ({ ok: true, ...r }))
         .catch(e => { console.error('SeatGeek snapshot failed:', e); return { ok: false, error: e.message }; })
-    : { ok: false, skipped: 'SEATGEEK_CLIENT_ID not configured' };
+    : {
+        ok: false,
+        skipped: 'SEATGEEK_CLIENT_ID not configured',
+        debug: {
+          fromNetlifyLen: fromNetlify ? fromNetlify.length : null,
+          fromProcessLen: fromProcess ? fromProcess.length : null,
+          processKeysWithSeatGeek: Object.keys(process.env || {}).filter(k => /seat/i.test(k)),
+        },
+      };
 
   const teams = teamResults.map((r, i) => ({
     teamId: TEAM_IDS[i],
