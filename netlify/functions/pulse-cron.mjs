@@ -52,6 +52,7 @@ export default async (req) => {
               title: parsed.events[0].title,
               type: parsed.events[0].type,
               datetime_local: parsed.events[0].datetime_local,
+              stats: parsed.events[0].stats,
               performers: parsed.events[0].performers?.map(p => ({
                 id: p.id, slug: p.slug, name: p.name, home_team: p.home_team, type: p.type,
               })),
