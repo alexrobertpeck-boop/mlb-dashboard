@@ -342,6 +342,12 @@
   .pitcher.pitcher-empty {
     visibility: hidden;
   }
+  /* ─── Profile setup modal ─── */
+  .profile-hint {
+    font-size: 0.78em;
+    color: #888;
+    margin: -8px 0 12px;
+  }
   .pitcher {
     font-size: 0.68em;
     color: #555;
@@ -2196,6 +2202,25 @@
       <span id="auth-toggle-text">Don't have an account?</span>
       <button type="button" id="auth-toggle-btn">Sign up</button>
     </div>
+  </div>
+</div>
+
+<div class="auth-modal" id="profile-setup-modal" hidden>
+  <div class="auth-modal-backdrop"></div>
+  <div class="auth-modal-content">
+    <h2>Welcome to 162-0!</h2>
+    <p class="attendance-hint" style="margin-top:-8px;">Pick a username and display name so friends can find you and follow your collection.</p>
+    <form class="auth-form" id="profile-setup-form">
+      <label for="profile-username">Username</label>
+      <input type="text" id="profile-username" autocomplete="off" required minlength="3" maxlength="20" pattern="[a-z0-9_\-]+" placeholder="e.g. alex.peck">
+      <div class="profile-hint">3–20 characters · lowercase letters, digits, _, - only</div>
+
+      <label for="profile-display-name">Display name</label>
+      <input type="text" id="profile-display-name" autocomplete="off" required maxlength="40" placeholder="What friends will see">
+
+      <div class="auth-message" id="profile-setup-message" hidden></div>
+      <button type="submit" class="auth-submit" id="profile-setup-submit">Save and continue</button>
+    </form>
   </div>
 </div>
 
@@ -4878,6 +4903,85 @@ let authMode = 'login'; // 'login' | 'signup'
 
 let savedTeams = [];
 
+// Populated on every page load for the signed-in user. Stays null until set.
+let currentProfile = null;
+
+async function loadCurrentProfile(userId) {
+  const { data, error } = await sb.from('profiles').select('*').eq('user_id', userId).maybeSingle();
+  if (error) { console.error('Profile load failed:', error); return null; }
+  return data;
+}
+
+function showProfileSetupModal() {
+  const modal = document.getElementById('profile-setup-modal');
+  modal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('profile-username').focus(), 50);
+}
+
+function closeProfileSetupModal() {
+  document.getElementById('profile-setup-modal').hidden = true;
+  document.body.style.overflow = '';
+}
+
+function setProfileSetupMessage(text, kind) {
+  const el = document.getElementById('profile-setup-message');
+  el.hidden = !text;
+  el.textContent = text || '';
+  el.className = 'auth-message' + (kind ? ` ${kind}` : '');
+}
+
+async function handleProfileSetup(e) {
+  e.preventDefault();
+  const username = document.getElementById('profile-username').value.trim().toLowerCase();
+  const displayName = document.getElementById('profile-display-name').value.trim();
+  const submitBtn = document.getElementById('profile-setup-submit');
+
+  if (!/^[a-z0-9_\-]{3,20}$/.test(username)) {
+    setProfileSetupMessage('Username must be 3–20 chars, lowercase letters / digits / _ / -', 'error');
+    return;
+  }
+  if (!displayName) {
+    setProfileSetupMessage('Pick a display name.', 'error');
+    return;
+  }
+
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) { setProfileSetupMessage('Not logged in.', 'error'); return; }
+
+  submitBtn.disabled = true;
+  setProfileSetupMessage('Saving…', 'info');
+
+  const { error } = await sb.from('profiles').insert({
+    user_id: user.id,
+    username,
+    display_name: displayName,
+  });
+
+  submitBtn.disabled = false;
+
+  if (error) {
+    // 23505 is Postgres unique violation — username already taken
+    if (error.code === '23505' || /duplicate/i.test(error.message || '')) {
+      setProfileSetupMessage('That username is taken — try another.', 'error');
+    } else {
+      console.error('Profile insert failed:', error);
+      setProfileSetupMessage(`Couldn't save: ${error.message}`, 'error');
+    }
+    return;
+  }
+
+  currentProfile = { user_id: user.id, username, display_name: displayName };
+  closeProfileSetupModal();
+}
+
+let profileSetupWired = false;
+function wireProfileSetupModal() {
+  if (profileSetupWired) return;
+  profileSetupWired = true;
+  document.getElementById('profile-setup-form').addEventListener('submit', handleProfileSetup);
+}
+
 function renderAuthArea(user) {
   const el = document.getElementById('auth-area');
   if (user) {
@@ -5096,6 +5200,7 @@ async function init() {
   wireAuthModal();
   wireTeamManager();
   wireInfoIcons();
+  wireProfileSetupModal();
 
   // Resolve auth + saved teams before deciding which view to render.
   // Both wrapped: a hung Supabase shouldn't leave the whole page in "Loading…".
@@ -5109,6 +5214,13 @@ async function init() {
   renderAuthArea(user);
   if (user) {
     try { await loadSavedTeams(); } catch (err) { console.error('Saved teams load failed:', err); }
+    try {
+      currentProfile = await loadCurrentProfile(user.id);
+      // Logged-in users who haven't picked a username yet see the setup modal.
+      // Page rendering continues underneath; the modal is just a blocking overlay
+      // until they save.
+      if (!currentProfile) showProfileSetupModal();
+    } catch (err) { console.error('Profile load failed:', err); }
   }
 
   const params = new URL(window.location.href).searchParams;
