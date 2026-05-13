@@ -5150,14 +5150,20 @@ async function loadAttendance() {
 
 /* ─── Games log ─── */
 
-function renderGamesList() {
-  const el = document.getElementById('games-list');
+function renderGamesList(elementId = 'games-list', dataOverride = null) {
+  const el = document.getElementById(elementId);
   if (!el) return;
-  if (attendedGames.length === 0) {
-    el.innerHTML = '<div class="empty-note">No games logged yet. Click "+ Log a Game" above to add one.</div>';
+  const sourceGames = dataOverride?.games ?? attendedGames;
+  const limit = dataOverride?.limit ?? Infinity;
+  const games = sourceGames.slice(0, limit);
+  const readOnly = !!dataOverride;
+  if (games.length === 0) {
+    el.innerHTML = readOnly
+      ? '<div class="empty-note">No games logged yet.</div>'
+      : '<div class="empty-note">No games logged yet. Click "+ Log a Game" above to add one.</div>';
     return;
   }
-  el.innerHTML = attendedGames.map(g => {
+  el.innerHTML = games.map(g => {
     const date = new Date(g.game_date + 'T12:00:00').toLocaleDateString(undefined, {
       weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
     });
@@ -6169,6 +6175,11 @@ async function loadUserProfile(username) {
     ${renderUserTeamsSection(teamsByRole)}
 
     <section>
+      <h2>Recent Games</h2>
+      <div class="games-list" id="user-recent-games"></div>
+    </section>
+
+    <section>
       <h2>Pennants</h2>
       <div class="pennants-grid" id="user-pennants"></div>
     </section>
@@ -6189,6 +6200,7 @@ async function loadUserProfile(username) {
   }
 
   // Reuse the existing renderers with the friend's data
+  renderGamesList('user-recent-games', { games: friendGames, limit: 5 });
   renderPennants('user-pennants', {
     attendedGames: friendGames,
     visitedStadiums: friendStadiums,
