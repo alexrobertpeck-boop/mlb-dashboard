@@ -399,11 +399,24 @@ export async function fetchAndStoreSeatGeekEvents(clientId, supaUrl, supaKey) {
     }
   }
 
-  if (allRows.length) {
-    await supabaseUpsert(supaUrl, supaKey, 'seatgeek_events', allRows);
+  // Dedupe by (home_team_id, game_date) — doubleheaders or duplicate listings
+  // (premium seating, etc.) can put the same PK in the batch twice, which
+  // Postgres rejects (error 21000). Keep the first occurrence.
+  const seen = new Set();
+  const dedupedRows = [];
+  let dropped = 0;
+  for (const row of allRows) {
+    const key = `${row.home_team_id}_${row.game_date}`;
+    if (seen.has(key)) { dropped++; continue; }
+    seen.add(key);
+    dedupedRows.push(row);
   }
 
-  return { ok: okCount, total: teamEntries.length, eventsWritten: allRows.length, failures };
+  if (dedupedRows.length) {
+    await supabaseUpsert(supaUrl, supaKey, 'seatgeek_events', dedupedRows);
+  }
+
+  return { ok: okCount, total: teamEntries.length, eventsWritten: dedupedRows.length, deduped: dropped, failures };
 }
 
 // ---------- Claude + Supabase ----------
