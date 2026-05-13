@@ -348,6 +348,93 @@
     color: #888;
     margin: 4px 0 0;
   }
+
+  /* ─── Friends view ─── */
+  #friend-search-input {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 0.95em;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-sizing: border-box;
+    margin-bottom: 12px;
+  }
+  .friend-search-results {
+    border: 1px solid #ececec;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+  }
+  .friend-search-results:empty { display: none; }
+  .friend-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f3f3f3;
+  }
+  .friend-row:last-child { border-bottom: none; }
+  .friend-row-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .friend-row-name {
+    font-weight: 700;
+    font-size: 0.95em;
+  }
+  .friend-row-username {
+    font-size: 0.78em;
+    color: #888;
+  }
+  .friend-row-action {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    background: #fff;
+    color: #333;
+    font-size: 0.82em;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .friend-row-action.follow {
+    background: var(--team-primary, #002D72);
+    border-color: var(--team-primary, #002D72);
+    color: white;
+  }
+  .friend-row-action.follow:hover { opacity: 0.9; }
+  .friend-row-action.unfollow:hover {
+    background: #fee;
+    border-color: #c62828;
+    color: #c62828;
+  }
+  .friend-row-action:disabled { opacity: 0.5; cursor: default; }
+  .friend-row-link {
+    color: inherit;
+    text-decoration: none;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .friend-row-link:hover .friend-row-name { text-decoration: underline; }
+  .follow-count {
+    color: #888;
+    font-weight: 600;
+    font-size: 0.7em;
+    margin-left: 6px;
+  }
+  .friend-empty {
+    color: #999;
+    font-style: italic;
+    padding: 12px 4px;
+  }
+  .friend-search-empty {
+    padding: 14px;
+    text-align: center;
+    color: #999;
+    font-size: 0.9em;
+  }
   .pitcher {
     font-size: 0.68em;
     color: #555;
@@ -1443,25 +1530,37 @@
 
   /* View-based show/hide */
   main[data-view="landing"]    #team-view,
-  main[data-view="landing"]    #attendance-view { display: none; }
+  main[data-view="landing"]    #attendance-view,
+  main[data-view="landing"]    #friends-view { display: none; }
   main[data-view="team"]       #landing-view,
-  main[data-view="team"]       #attendance-view { display: none; }
+  main[data-view="team"]       #attendance-view,
+  main[data-view="team"]       #friends-view { display: none; }
   main[data-view="attendance"] #team-view,
-  main[data-view="attendance"] #landing-view { display: none; }
+  main[data-view="attendance"] #landing-view,
+  main[data-view="attendance"] #friends-view { display: none; }
+  main[data-view="friends"]    #team-view,
+  main[data-view="friends"]    #landing-view,
+  main[data-view="friends"]    #attendance-view { display: none; }
   /* Override the HTML `hidden` attribute when this view is active */
   main[data-view="attendance"] #attendance-view { display: block; }
+  main[data-view="friends"]    #friends-view { display: block; }
 
   main[data-view="landing"] .header-logo,
   main[data-view="landing"] .header-record,
   main[data-view="landing"] .header-chevron,
   main[data-view="attendance"] .header-logo,
   main[data-view="attendance"] .header-record,
-  main[data-view="attendance"] .header-chevron { display: none; }
+  main[data-view="attendance"] .header-chevron,
+  main[data-view="friends"] .header-logo,
+  main[data-view="friends"] .header-record,
+  main[data-view="friends"] .header-chevron { display: none; }
 
   main[data-view="landing"] .header-brand,
-  main[data-view="attendance"] .header-brand { cursor: default; }
+  main[data-view="attendance"] .header-brand,
+  main[data-view="friends"] .header-brand { cursor: default; }
   main[data-view="landing"] .header-brand:hover,
-  main[data-view="attendance"] .header-brand:hover { background: transparent; }
+  main[data-view="attendance"] .header-brand:hover,
+  main[data-view="friends"] .header-brand:hover { background: transparent; }
 
   /* ─── Attendance view ─── */
   .attendance-header-row {
@@ -2003,6 +2102,7 @@
       </div>
       <div class="utility-right">
         <a href="/?view=attendance" class="utility-link" id="stadiums-link" hidden>My Tracker</a>
+        <a href="/?view=friends" class="utility-link" id="friends-link" hidden>Friends</a>
         <div class="auth-area" id="auth-area"></div>
       </div>
     </div>
@@ -2098,6 +2198,25 @@
       <h2>Games Logged</h2>
       <button class="auth-submit games-add-btn" id="add-game-btn">+ Log a Game</button>
       <div class="games-list" id="games-list"></div>
+    </section>
+  </div>
+
+  <div id="friends-view" hidden>
+    <section>
+      <h2>Find Friends</h2>
+      <p class="attendance-hint">Search by username or display name. Following someone lets you see their full collection — games, stadiums, pennants, bucket list.</p>
+      <input type="text" id="friend-search-input" placeholder="Search by username or name…" autocomplete="off">
+      <div class="friend-search-results" id="friend-search-results"></div>
+    </section>
+
+    <section>
+      <h2>Following <span class="follow-count" id="following-count"></span></h2>
+      <div id="following-list" class="loading">Loading…</div>
+    </section>
+
+    <section>
+      <h2>Followers <span class="follow-count" id="followers-count"></span></h2>
+      <div id="followers-list" class="loading">Loading…</div>
     </section>
   </div>
 
@@ -4982,6 +5101,146 @@ function wireProfileSetupModal() {
   document.getElementById('profile-setup-form').addEventListener('submit', handleProfileSetup);
 }
 
+/* ─── Friends (follow graph) ─── */
+
+let followingSet = new Set();   // user_ids the current user follows
+let followersSet = new Set();   // user_ids that follow the current user
+
+async function loadFollowGraph() {
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return;
+  const [followingRes, followersRes] = await Promise.all([
+    sb.from('follows').select('followed_id').eq('follower_id', user.id),
+    sb.from('follows').select('follower_id').eq('followed_id', user.id),
+  ]);
+  followingSet = new Set((followingRes.data || []).map(r => r.followed_id));
+  followersSet = new Set((followersRes.data || []).map(r => r.follower_id));
+}
+
+async function loadFriendsView() {
+  await loadFollowGraph();
+
+  // Pull profiles for everyone in either set, in one query
+  const allIds = [...new Set([...followingSet, ...followersSet])];
+  const profileById = {};
+  if (allIds.length) {
+    const { data } = await sb.from('profiles').select('*').in('user_id', allIds);
+    for (const p of (data || [])) profileById[p.user_id] = p;
+  }
+
+  renderFollowingList(profileById);
+  renderFollowersList(profileById);
+}
+
+function renderFollowingList(profileById) {
+  const el = document.getElementById('following-list');
+  el.classList.remove('loading');
+  document.getElementById('following-count').textContent = followingSet.size ? `(${followingSet.size})` : '';
+  if (followingSet.size === 0) {
+    el.innerHTML = '<div class="friend-empty">You haven\'t followed anyone yet. Use the search above to find friends.</div>';
+    return;
+  }
+  el.innerHTML = [...followingSet].map(uid => renderFriendRow(profileById[uid] || { user_id: uid, username: '?', display_name: 'Unknown' }, 'unfollow')).join('');
+  wireFriendRowActions(el);
+}
+
+function renderFollowersList(profileById) {
+  const el = document.getElementById('followers-list');
+  el.classList.remove('loading');
+  document.getElementById('followers-count').textContent = followersSet.size ? `(${followersSet.size})` : '';
+  if (followersSet.size === 0) {
+    el.innerHTML = '<div class="friend-empty">No followers yet. Share your profile link to attract some.</div>';
+    return;
+  }
+  // Followers: show follow-back if we don't follow them, else show "Following"
+  el.innerHTML = [...followersSet].map(uid => {
+    const profile = profileById[uid] || { user_id: uid, username: '?', display_name: 'Unknown' };
+    const action = followingSet.has(uid) ? 'unfollow' : 'follow';
+    return renderFriendRow(profile, action);
+  }).join('');
+  wireFriendRowActions(el);
+}
+
+function renderFriendRow(profile, action) {
+  const actionLabel = action === 'follow' ? 'Follow' : 'Following';
+  const actionClass = action === 'follow' ? 'follow' : 'unfollow';
+  return `<div class="friend-row" data-user-id="${escapeHtml(profile.user_id)}">
+    <a class="friend-row-link" href="/?user=${encodeURIComponent(profile.username)}">
+      <span class="friend-row-name">${escapeHtml(profile.display_name || profile.username)}</span>
+      <span class="friend-row-username">@${escapeHtml(profile.username)}</span>
+    </a>
+    <button class="friend-row-action ${actionClass}" data-action="${action}" data-user-id="${escapeHtml(profile.user_id)}">${actionLabel}</button>
+  </div>`;
+}
+
+function wireFriendRowActions(container) {
+  container.querySelectorAll('.friend-row-action').forEach(btn => {
+    btn.addEventListener('click', () => onFollowAction(btn));
+  });
+}
+
+async function onFollowAction(btn) {
+  const targetUserId = btn.dataset.userId;
+  const action = btn.dataset.action;
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user || !targetUserId) return;
+  btn.disabled = true;
+  if (action === 'follow') {
+    const { error } = await sb.from('follows').insert({ follower_id: user.id, followed_id: targetUserId });
+    if (error) { console.error('Follow failed:', error); btn.disabled = false; return; }
+    followingSet.add(targetUserId);
+  } else {
+    const { error } = await sb.from('follows').delete().eq('follower_id', user.id).eq('followed_id', targetUserId);
+    if (error) { console.error('Unfollow failed:', error); btn.disabled = false; return; }
+    followingSet.delete(targetUserId);
+  }
+  // Re-render both lists + any search results so all rows reflect new state
+  await loadFriendsView();
+  // If the search box has content, re-run the search to refresh action buttons
+  const q = document.getElementById('friend-search-input').value.trim();
+  if (q) runFriendSearch();
+}
+
+let friendSearchDebounce = null;
+function onFriendSearchInput() {
+  clearTimeout(friendSearchDebounce);
+  friendSearchDebounce = setTimeout(runFriendSearch, 180);
+}
+
+async function runFriendSearch() {
+  const q = document.getElementById('friend-search-input').value.trim().toLowerCase();
+  const el = document.getElementById('friend-search-results');
+  if (q.length < 2) { el.innerHTML = ''; return; }
+  const { data: { user } } = await sb.auth.getUser();
+  const myId = user?.id;
+  const { data, error } = await sb.from('profiles')
+    .select('user_id, username, display_name')
+    .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
+    .limit(12);
+  if (error) {
+    console.error('Friend search failed:', error);
+    el.innerHTML = '<div class="friend-search-empty">Search failed.</div>';
+    return;
+  }
+  const results = (data || []).filter(p => p.user_id !== myId);
+  if (!results.length) {
+    el.innerHTML = '<div class="friend-search-empty">No matches.</div>';
+    return;
+  }
+  el.innerHTML = results.map(p => {
+    const action = followingSet.has(p.user_id) ? 'unfollow' : 'follow';
+    return renderFriendRow(p, action);
+  }).join('');
+  wireFriendRowActions(el);
+}
+
+let friendsViewWired = false;
+function wireFriendsView() {
+  if (friendsViewWired) return;
+  friendsViewWired = true;
+  document.getElementById('friend-search-input').addEventListener('input', onFriendSearchInput);
+}
+
 function renderAuthArea(user) {
   const el = document.getElementById('auth-area');
   if (user) {
@@ -5229,6 +5488,7 @@ async function init() {
 
   let view;
   if (user && viewFromUrl === 'attendance') view = 'attendance';
+  else if (user && viewFromUrl === 'friends') view = 'friends';
   else if (TEAMS[teamFromUrl])               view = 'team';
   else if (user && savedTeams.length > 0)    view = 'landing';
   else                                        view = 'team';
@@ -5243,6 +5503,7 @@ async function init() {
   if (user) {
     if (view !== 'landing')    document.getElementById('return-link').hidden = false;
     if (view !== 'attendance') document.getElementById('stadiums-link').hidden = false;
+    if (view !== 'friends')    document.getElementById('friends-link').hidden = false;
   }
 
   if (view === 'attendance') {
@@ -5250,6 +5511,14 @@ async function init() {
     document.getElementById('header-team-name').textContent = 'My Tracker';
     // Default MLB blue/red theme — no team-specific colors here
     await loadAttendance();
+    return;
+  }
+
+  if (view === 'friends') {
+    document.title = '162-0 · Friends';
+    document.getElementById('header-team-name').textContent = 'Friends';
+    wireFriendsView();
+    await loadFriendsView();
     return;
   }
 
