@@ -707,6 +707,33 @@
     padding: 24px 8px;
     text-align: center;
   }
+  .notification-section-label {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 700;
+    color: #777;
+    padding: 14px 12px 6px;
+    border-top: 1px solid #eee;
+    margin-top: 4px;
+  }
+  .notification-section-label:first-child {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 4px;
+  }
+  .cracker-jacks-btn-inline {
+    padding: 6px 12px;
+    font-size: 0.82em;
+    border-radius: 5px;
+    align-self: center;
+    flex-shrink: 0;
+  }
+  .cracker-jacks-btn-inline.thrown {
+    background: #f1f8e9;
+    border-color: #aed581;
+    color: #2e7d32;
+  }
   .pitcher {
     font-size: 0.68em;
     color: #555;
@@ -5669,46 +5696,129 @@ async function openNotificationsModal() {
   const { data: { user } } = await sb.auth.getUser();
   if (!user) return;
 
-  const { data, error } = await sb.from('interactions')
-    .select('id, from_user, kind, context_team_id, context_game_pk, read_at, created_at')
-    .eq('to_user', user.id)
-    .order('created_at', { ascending: false })
-    .limit(50);
-  el.classList.remove('loading');
-  if (error) {
-    el.innerHTML = '<div class="error">Couldn\'t load notifications.</div>';
-    return;
-  }
-  if (!data?.length) {
-    el.innerHTML = '<div class="notifications-empty">Nothing to see here yet.</div>';
-    return;
-  }
-  const senderIds = [...new Set(data.map(r => r.from_user))];
-  const { data: profiles } = await sb.from('profiles').select('user_id, username, display_name').in('user_id', senderIds);
+  // Get follow graph so we can build throw-opportunities
+  await loadFollowGraph();
+  const followedIds = [...followingSet];
+  // PostgREST .in() with an empty array throws; gate behind length
+  const followedFilter = followedIds.length ? followedIds : ['00000000-0000-0000-0000-000000000000'];
+
+  const [receivedRes, friendProfilesRes, friendTeamsRes, sentRes] = await Promise.all([
+    sb.from('interactions')
+      .select('id, from_user, kind, context_team_id, context_game_pk, read_at, created_at')
+      .eq('to_user', user.id)
+      .order('created_at', { ascending: false })
+      .limit(50),
+    sb.from('profiles').select('user_id, username, display_name').in('user_id', followedFilter),
+    sb.from('user_teams').select('user_id, team_id, role').in('user_id', followedFilter),
+    sb.from('interactions')
+      .select('to_user, context_game_pk')
+      .eq('from_user', user.id)
+      .eq('kind', 'cracker_jacks')
+      .gte('created_at', new Date(Date.now() - 5 * 86400000).toISOString()),
+  ]);
+
+  // ---- Build "Throw" opportunities ----
   const profileById = {};
-  for (const p of (profiles || [])) profileById[p.user_id] = p;
+  for (const p of (friendProfilesRes.data || [])) profileById[p.user_id] = p;
 
-  el.innerHTML = data.map(r => {
-    const sender = profileById[r.from_user] || { username: '?', display_name: 'Unknown' };
-    const teamName = r.context_team_id ? (TEAMS[r.context_team_id]?.short || 'their team') : 'their team';
-    const senderLink = `<a href="/?user=${encodeURIComponent(sender.username)}">${escapeHtml(sender.display_name || sender.username)}</a>`;
-    let body = '';
-    if (r.kind === 'cracker_jacks') {
-      body = `${senderLink} threw cracker jacks after the ${escapeHtml(teamName)} lost.`;
-    } else {
-      body = `${senderLink} sent you something.`;
+  const mainTeamByFriend = {};
+  for (const row of (friendTeamsRes.data || [])) {
+    if (row.role === 'main' && !mainTeamByFriend[row.user_id]) {
+      mainTeamByFriend[row.user_id] = row.team_id;
     }
-    return `<div class="notification-row ${r.read_at ? '' : 'unread'}">
-      <div class="notification-icon">🍿</div>
-      <div class="notification-body">
-        ${body}
-        <div class="notification-time">${timeAgo(r.created_at)}</div>
-      </div>
-    </div>`;
-  }).join('');
+  }
 
-  // Mark all as read (server-side update), then update local badge
-  const unreadIds = data.filter(r => !r.read_at).map(r => r.id);
+  const alreadyThrown = new Set();
+  for (const r of (sentRes.data || [])) {
+    alreadyThrown.add(`${r.to_user}|${r.context_game_pk}`);
+  }
+
+  // One loss lookup per unique main team
+  const uniqueTeams = [...new Set(Object.values(mainTeamByFriend))];
+  const lossByTeam = {};
+  await Promise.all(uniqueTeams.map(async teamId => {
+    const loss = await getFriendRecentLoss(teamId);
+    if (loss) lossByTeam[teamId] = loss;
+  }));
+
+  const opportunities = [];
+  for (const [friendId, mainTeamId] of Object.entries(mainTeamByFriend)) {
+    const loss = lossByTeam[mainTeamId];
+    if (!loss) continue;
+    const profile = profileById[friendId];
+    if (!profile) continue;
+    const thrown = alreadyThrown.has(`${friendId}|${loss.gamePk}`);
+    opportunities.push({ friendId, profile, mainTeamId, loss, thrown });
+  }
+
+  // ---- Build "Received" list ----
+  const received = receivedRes.data || [];
+  const senderIds = [...new Set(received.map(r => r.from_user))];
+  if (senderIds.length) {
+    const { data: senderProfiles } = await sb.from('profiles').select('user_id, username, display_name').in('user_id', senderIds);
+    for (const p of (senderProfiles || [])) profileById[p.user_id] = p;
+  }
+
+  // ---- Render ----
+  el.classList.remove('loading');
+
+  const throwSection = opportunities.length
+    ? `<div class="notification-section-label">Throw Cracker Jacks</div>` +
+      opportunities.map(o => {
+        const teamName = TEAMS[o.mainTeamId]?.short || 'team';
+        const dateStr = new Date(o.loss.date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+        const buttonState = o.thrown ? 'thrown' : 'active';
+        const buttonLabel = o.thrown ? '🍿 Thrown' : '🍿 Throw';
+        return `<div class="notification-row">
+          <div class="notification-icon">🥲</div>
+          <div class="notification-body">
+            <a href="/?user=${encodeURIComponent(o.profile.username)}">${escapeHtml(o.profile.display_name || o.profile.username)}</a>'s
+            ${escapeHtml(teamName)} lost ${o.loss.myScore}–${o.loss.oppScore} to the ${escapeHtml(o.loss.oppName)}.
+            <div class="notification-time">${dateStr}</div>
+          </div>
+          <button class="cracker-jacks-btn cracker-jacks-btn-inline ${buttonState}"
+                  data-to="${o.friendId}" data-team="${o.mainTeamId}" data-game="${o.loss.gamePk}"
+                  ${o.thrown ? 'disabled' : ''}>${buttonLabel}</button>
+        </div>`;
+      }).join('')
+    : '';
+
+  const receivedSection = received.length
+    ? `<div class="notification-section-label">Received</div>` +
+      received.map(r => {
+        const sender = profileById[r.from_user] || { username: '?', display_name: 'Unknown' };
+        const teamName = r.context_team_id ? (TEAMS[r.context_team_id]?.short || 'their team') : 'their team';
+        const senderLink = `<a href="/?user=${encodeURIComponent(sender.username)}">${escapeHtml(sender.display_name || sender.username)}</a>`;
+        const body = r.kind === 'cracker_jacks'
+          ? `${senderLink} threw cracker jacks after the ${escapeHtml(teamName)} lost.`
+          : `${senderLink} sent you something.`;
+        return `<div class="notification-row ${r.read_at ? '' : 'unread'}">
+          <div class="notification-icon">🍿</div>
+          <div class="notification-body">
+            ${body}
+            <div class="notification-time">${timeAgo(r.created_at)}</div>
+          </div>
+        </div>`;
+      }).join('')
+    : '';
+
+  if (!throwSection && !receivedSection) {
+    el.innerHTML = '<div class="notifications-empty">Nothing to see here yet — follow some friends and check back when their main team has a tough night.</div>';
+  } else {
+    el.innerHTML = throwSection + receivedSection;
+  }
+
+  // Wire throw buttons
+  el.querySelectorAll('.cracker-jacks-btn-inline:not([disabled])').forEach(btn => {
+    btn.addEventListener('click', () => {
+      sendCrackerJacks(btn.dataset.to, parseInt(btn.dataset.team, 10), parseInt(btn.dataset.game, 10), btn);
+      btn.classList.remove('active');
+      btn.classList.add('thrown');
+    });
+  });
+
+  // Mark received as read
+  const unreadIds = received.filter(r => !r.read_at).map(r => r.id);
   if (unreadIds.length) {
     await sb.from('interactions').update({ read_at: new Date().toISOString() }).in('id', unreadIds);
     unreadInteractionsCount = 0;
