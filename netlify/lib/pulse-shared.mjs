@@ -302,6 +302,108 @@ export async function fetchAndStorePlayoffOdds(supaUrl, supaKey) {
 function round(v) { return v == null ? null : Math.round(Number(v) * 100) / 100; }
 function clamp01(v) { if (v == null) return null; const n = Number(v); return isNaN(n) ? null : Math.max(0, Math.min(1, n)); }
 
+// ---------- SeatGeek Tickets ----------
+
+// SeatGeek MLB performer slug ↔ MLB team id
+export const SEATGEEK_SLUG_BY_TEAM = {
+  108: 'mlb-los-angeles-angels',
+  109: 'mlb-arizona-diamondbacks',
+  110: 'mlb-baltimore-orioles',
+  111: 'mlb-boston-red-sox',
+  112: 'mlb-chicago-cubs',
+  113: 'mlb-cincinnati-reds',
+  114: 'mlb-cleveland-guardians',
+  115: 'mlb-colorado-rockies',
+  116: 'mlb-detroit-tigers',
+  117: 'mlb-houston-astros',
+  118: 'mlb-kansas-city-royals',
+  119: 'mlb-los-angeles-dodgers',
+  120: 'mlb-washington-nationals',
+  121: 'mlb-new-york-mets',
+  133: 'mlb-athletics',
+  134: 'mlb-pittsburgh-pirates',
+  135: 'mlb-san-diego-padres',
+  136: 'mlb-seattle-mariners',
+  137: 'mlb-san-francisco-giants',
+  138: 'mlb-st-louis-cardinals',
+  139: 'mlb-tampa-bay-rays',
+  140: 'mlb-texas-rangers',
+  141: 'mlb-toronto-blue-jays',
+  142: 'mlb-minnesota-twins',
+  143: 'mlb-philadelphia-phillies',
+  144: 'mlb-atlanta-braves',
+  145: 'mlb-chicago-white-sox',
+  146: 'mlb-miami-marlins',
+  147: 'mlb-new-york-yankees',
+  158: 'mlb-milwaukee-brewers',
+};
+
+const TEAM_BY_SEATGEEK_SLUG = Object.fromEntries(
+  Object.entries(SEATGEEK_SLUG_BY_TEAM).map(([id, slug]) => [slug, parseInt(id, 10)])
+);
+
+const SEATGEEK_BASE = 'https://api.seatgeek.com/2/events';
+
+async function fetchSeatGeekEventsForTeam(slug, clientId, fromDate) {
+  const url = `${SEATGEEK_BASE}?performers.slug=${slug}&client_id=${clientId}&datetime_local.gte=${fromDate}&per_page=100&type=mlb`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`SeatGeek ${res.status} for ${slug}`);
+  const data = await res.json();
+  return data.events || [];
+}
+
+export async function fetchAndStoreSeatGeekEvents(clientId, supaUrl, supaKey) {
+  const today = isoDate(0);
+  const teamEntries = Object.entries(SEATGEEK_SLUG_BY_TEAM);
+
+  const results = await Promise.allSettled(
+    teamEntries.map(async ([teamIdStr, slug]) => {
+      const teamId = parseInt(teamIdStr, 10);
+      const events = await fetchSeatGeekEventsForTeam(slug, clientId, today);
+      const rows = [];
+      for (const e of events) {
+        const home = (e.performers || []).find(p => p.home_team);
+        if (!home) continue;
+        const homeTeamId = TEAM_BY_SEATGEEK_SLUG[home.slug];
+        // Only persist when THIS team is home — avoids dup inserts when we query
+        // the same event again from the away team's slug.
+        if (homeTeamId !== teamId) continue;
+        const game_date = e.datetime_local?.slice(0, 10);
+        if (!game_date) continue;
+        rows.push({
+          home_team_id: homeTeamId,
+          game_date,
+          url: e.url,
+          min_price: e.stats?.lowest_price ?? null,
+          listing_count: e.stats?.listing_count ?? null,
+          updated_at: new Date().toISOString(),
+        });
+      }
+      return { teamId, slug, rows };
+    })
+  );
+
+  const allRows = [];
+  let okCount = 0;
+  const failures = [];
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    if (r.status === 'fulfilled') {
+      allRows.push(...r.value.rows);
+      okCount++;
+    } else {
+      const [, slug] = teamEntries[i];
+      failures.push({ slug, error: String(r.reason?.message || r.reason) });
+    }
+  }
+
+  if (allRows.length) {
+    await supabaseUpsert(supaUrl, supaKey, 'seatgeek_events', allRows);
+  }
+
+  return { ok: okCount, total: teamEntries.length, eventsWritten: allRows.length, failures };
+}
+
 // ---------- Claude + Supabase ----------
 
 export async function callClaude(prompt, apiKey, maxTokens = 700) {

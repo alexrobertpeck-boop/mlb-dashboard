@@ -12,6 +12,7 @@ import {
   gatherLeagueContext, buildLeaguePrompt,
   callClaude, supabaseUpsert, getEnv,
   fetchAndStorePlayoffOdds,
+  fetchAndStoreSeatGeekEvents,
 } from '../lib/pulse-shared.mjs';
 
 export const config = {
@@ -44,6 +45,14 @@ export default async () => {
     .then(r => ({ ok: true, ...r }))
     .catch(e => { console.error('Playoff odds snapshot failed:', e); return { ok: false, error: e.message }; });
 
+  // SeatGeek upcoming events (also independent — skip cleanly if no client id)
+  const seatgeekClientId = getEnv('SEATGEEK_CLIENT_ID');
+  const seatgeekResult = seatgeekClientId
+    ? await fetchAndStoreSeatGeekEvents(seatgeekClientId, supaUrl, supaKey)
+        .then(r => ({ ok: true, ...r }))
+        .catch(e => { console.error('SeatGeek snapshot failed:', e); return { ok: false, error: e.message }; })
+    : { ok: false, skipped: 'SEATGEEK_CLIENT_ID not configured' };
+
   const teams = teamResults.map((r, i) => ({
     teamId: TEAM_IDS[i],
     ok: r.status === 'fulfilled',
@@ -51,8 +60,8 @@ export default async () => {
   }));
 
   const okCount = teams.filter(t => t.ok).length;
-  console.log(`Pulse cron: ${okCount}/${TEAM_IDS.length} teams ok, mlb: ${mlbResult.ok ? 'ok' : 'failed'}, odds: ${oddsResult.ok ? 'ok' : 'failed'}`);
-  return Response.json({ teams, mlb: mlbResult, odds: oddsResult });
+  console.log(`Pulse cron: ${okCount}/${TEAM_IDS.length} teams ok, mlb: ${mlbResult.ok ? 'ok' : 'failed'}, odds: ${oddsResult.ok ? 'ok' : 'failed'}, seatgeek: ${seatgeekResult.ok ? 'ok' : (seatgeekResult.skipped ? 'skipped' : 'failed')}`);
+  return Response.json({ teams, mlb: mlbResult, odds: oddsResult, seatgeek: seatgeekResult });
 };
 
 async function generateAndStoreTeamPulse(teamId, apiKey, supaUrl, supaKey) {

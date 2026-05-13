@@ -322,6 +322,23 @@
   .badge.live { background: #b3261e; color: white; animation: pulse 1.6s infinite; }
   @keyframes pulse { 50% { opacity: 0.6; } }
   .empty-note { color: #aaa; font-size: 0.78em; margin-top: 24px; }
+  .ticket-link {
+    display: inline-block;
+    font-size: 0.7em;
+    font-weight: 700;
+    color: var(--team-primary);
+    background: rgba(var(--team-primary-rgb), 0.08);
+    border: 1px solid rgba(var(--team-primary-rgb), 0.2);
+    padding: 2px 7px;
+    border-radius: 3px;
+    margin-top: 4px;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.15s ease;
+  }
+  .ticket-link:hover {
+    background: rgba(var(--team-primary-rgb), 0.18);
+  }
   .pitcher {
     font-size: 0.68em;
     color: #555;
@@ -2427,7 +2444,10 @@ function gameInfo(g) {
   };
 }
 
-function renderGame(g) {
+// Populated by loadSchedule() — keyed `${home_team_id}_${YYYY-MM-DD}` -> { url, min_price }
+let scheduleTicketsByKey = {};
+
+function renderGame(g, localDate) {
   const i = gameInfo(g);
   const prefix = i.isHome ? 'vs' : '@';
   const logo = `https://www.mlbstatic.com/team-logos/${i.oppId}.svg`;
@@ -2457,12 +2477,25 @@ function renderGame(g) {
     ? `<div class="pitcher" title="${i.teamPitcher.fullName}">${shortName(i.teamPitcher.fullName)}</div>`
     : '';
 
+  // Ticket link: only for upcoming games (not Final / Postponed / Cancelled / Suspended / Live).
+  const upcoming = i.state !== 'Final'
+    && i.state !== 'Postponed'
+    && i.state !== 'Cancelled'
+    && i.state !== 'Suspended'
+    && i.abstractState !== 'Live';
+  const homeId = g.teams.home.team.id;
+  const ticket = upcoming && localDate ? scheduleTicketsByKey[`${homeId}_${localDate}`] : null;
+  const ticketHtml = ticket
+    ? `<a class="ticket-link" href="${escapeHtml(ticket.url)}" target="_blank" rel="noopener" title="Buy tickets on SeatGeek">🎟 ${ticket.min_price ? `from $${Math.round(ticket.min_price)}` : 'Tickets'}</a>`
+    : '';
+
   return `<div class="game-cell">
     <img class="logo" src="${logo}" alt="${i.oppAbbr}" onerror="this.style.visibility='hidden'">
     <div class="matchup"><span class="prefix">${prefix}</span>${i.oppAbbr}</div>
     ${statusHtml}
     ${resultHtml}
     ${pitcherBlock}
+    ${ticketHtml}
   </div>`;
 }
 
@@ -2494,7 +2527,7 @@ function renderDay(date, offset, games) {
 
   const body = games.length === 0
     ? `<div class="empty-note">—</div>`
-    : games.map(renderGame).join('');
+    : games.map(g => renderGame(g, date)).join('');
 
   return `<div class="${classes.join(' ')}">
     <div class="day-label">${weekday}</div>
@@ -2504,7 +2537,18 @@ function renderDay(date, offset, games) {
 }
 
 async function loadSchedule() {
-  const byDate = await fetchScheduleByDate(isoDate(-5), isoDate(5));
+  const [byDate, ticketsRes] = await Promise.all([
+    fetchScheduleByDate(isoDate(-5), isoDate(5)),
+    sb.from('seatgeek_events')
+      .select('home_team_id, game_date, url, min_price')
+      .gte('game_date', isoDate(0))
+      .lte('game_date', isoDate(5)),
+  ]);
+  scheduleTicketsByKey = {};
+  for (const row of (ticketsRes?.data || [])) {
+    scheduleTicketsByKey[`${row.home_team_id}_${row.game_date}`] = row;
+  }
+
   const cells = [];
   for (let offset = -5; offset <= 5; offset++) {
     const date = isoDate(offset);
