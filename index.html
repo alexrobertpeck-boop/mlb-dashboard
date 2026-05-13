@@ -515,6 +515,47 @@
     line-height: 1;
   }
   .user-summary-value .denom { color: #aaa; font-size: 0.6em; font-weight: 600; }
+
+  /* Team relationship dropdown inside the My Teams modal */
+  .team-role {
+    margin-left: auto;
+    padding: 3px 7px;
+    border-radius: 4px;
+    font-size: 0.78em;
+    border: 1px solid #ddd;
+    background: white;
+    cursor: pointer;
+  }
+  .team-pick input[type="checkbox"]:not(:checked) ~ .team-role { display: none; }
+
+  /* Team-followed display on profile */
+  .user-teams-row { display: flex; flex-direction: column; gap: 14px; margin-bottom: 28px; }
+  .user-teams-block {
+    background: #fafafa;
+    border: 1px solid #ececec;
+    border-radius: 10px;
+    padding: 12px 16px;
+  }
+  .user-teams-block.main   { border-left: 4px solid #2e7d32; }
+  .user-teams-block.rival  { border-left: 4px solid #c62828; }
+  .user-teams-block.interested { border-left: 4px solid #bbb; }
+  .user-teams-label {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 700;
+    color: #555;
+    margin-bottom: 8px;
+  }
+  .user-teams-logos { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  .user-teams-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85em;
+    color: #444;
+  }
+  .user-teams-logo img { width: 28px; height: 28px; object-fit: contain; }
   .pitcher {
     font-size: 0.68em;
     color: #555;
@@ -5130,6 +5171,7 @@ function showError(id) {
 let authMode = 'login'; // 'login' | 'signup'
 
 let savedTeams = [];
+let savedTeamRoles = {}; // team_id (number) → 'main' | 'rival' | 'interested'
 
 // Populated on every page load for the signed-in user. Stays null until set.
 let currentProfile = null;
@@ -5402,12 +5444,13 @@ async function loadUserProfile(username) {
 
   // Fetch all of their data (RLS will allow it since we're owner or follower)
   const friendId = profile.user_id;
-  const [gamesRes, stadiumsRes, teamsRes, bucketRes, seenRes] = await Promise.all([
+  const [gamesRes, stadiumsRes, teamsRes, bucketRes, seenRes, userTeamsRes] = await Promise.all([
     sb.from('attended_games').select('*').eq('user_id', friendId),
     sb.from('attended_stadiums').select('team_id').eq('user_id', friendId),
     sb.from('seen_teams').select('team_id').eq('user_id', friendId),
     sb.from('bucket_list_players').select('*').eq('user_id', friendId).order('added_at', { ascending: false }),
     sb.from('seen_players').select('*').eq('user_id', friendId),
+    sb.from('user_teams').select('team_id, role, display_order').eq('user_id', friendId).order('display_order', { ascending: true }),
   ]);
 
   const friendGames = gamesRes.data || [];
@@ -5415,6 +5458,14 @@ async function loadUserProfile(username) {
   const friendTeams = new Set((teamsRes.data || []).map(r => r.team_id));
   const friendBucket = bucketRes.data || [];
   const friendSeenPlayers = new Map((seenRes.data || []).map(r => [r.player_id, r]));
+  const friendUserTeams = userTeamsRes.data || [];
+
+  // Group by role for display
+  const teamsByRole = { main: [], rival: [], interested: [] };
+  for (const row of friendUserTeams) {
+    const role = row.role || 'interested';
+    if (teamsByRole[role]) teamsByRole[role].push(row.team_id);
+  }
 
   // Derived sets — stadiums + teams seen include game-derived
   const derivedStadiums = new Set(friendStadiums);
@@ -5442,6 +5493,8 @@ async function loadUserProfile(username) {
       </div>
     </div>
 
+    ${renderUserTeamsSection(teamsByRole)}
+
     <section>
       <h2>Pennants</h2>
       <div class="pennants-grid" id="user-pennants"></div>
@@ -5464,6 +5517,35 @@ async function loadUserProfile(username) {
     bucketList: friendBucket,
     seenPlayers: friendSeenPlayers,
   });
+}
+
+function renderUserTeamsSection(teamsByRole) {
+  const blocks = [];
+  const renderBlock = (role, label) => {
+    const ids = teamsByRole[role] || [];
+    if (!ids.length) return '';
+    const logos = ids.map(id => {
+      const team = TEAMS[id];
+      const name = team?.short || team?.name || `Team ${id}`;
+      return `<a class="user-teams-logo" href="/?team=${id}">
+        <img src="https://www.mlbstatic.com/team-logos/${id}.svg" alt="${escapeHtml(team?.abbr || '')}" onerror="this.style.visibility='hidden'">
+        <span>${escapeHtml(name)}</span>
+      </a>`;
+    }).join('');
+    return `<div class="user-teams-block ${role}">
+      <div class="user-teams-label">${escapeHtml(label)}</div>
+      <div class="user-teams-logos">${logos}</div>
+    </div>`;
+  };
+  blocks.push(renderBlock('main',       'Main team'));
+  blocks.push(renderBlock('rival',      'Rivals'));
+  blocks.push(renderBlock('interested', 'Just interested'));
+  const inner = blocks.filter(Boolean).join('');
+  if (!inner) return '';
+  return `<section>
+    <h2>Teams Followed</h2>
+    <div class="user-teams-row">${inner}</div>
+  </section>`;
 }
 
 function wireUserProfileFollowBtn(username) {
@@ -5610,10 +5692,12 @@ sb.auth.onAuthStateChange((event, session) => {
 
 async function loadSavedTeams() {
   const { data, error } = await sb.from('user_teams')
-    .select('team_id')
+    .select('team_id, role')
     .order('display_order', { ascending: true });
   if (error) { console.error('Error loading saved teams:', error); return; }
   savedTeams = data.map(r => r.team_id);
+  savedTeamRoles = {};
+  for (const row of data) savedTeamRoles[row.team_id] = row.role || 'interested';
   updateTeamCountBadge();
 }
 
@@ -5645,11 +5729,19 @@ function renderTeamCheckboxes() {
   const grid = document.getElementById('teams-grid');
   const sorted = Object.entries(TEAMS).sort((a, b) => a[1].name.localeCompare(b[1].name));
   grid.innerHTML = sorted.map(([id, t]) => {
-    const checked = savedTeams.includes(parseInt(id, 10)) ? 'checked' : '';
+    const teamId = parseInt(id, 10);
+    const checked = savedTeams.includes(teamId) ? 'checked' : '';
+    const role = savedTeamRoles[teamId] || 'interested';
+    const opt = (val, label) => `<option value="${val}" ${role === val ? 'selected' : ''}>${label}</option>`;
     return `<label class="team-pick">
       <input type="checkbox" data-team-id="${id}" ${checked}>
       <img src="https://www.mlbstatic.com/team-logos/${id}.svg" alt="" onerror="this.style.visibility='hidden'">
       <span>${t.name}</span>
+      <select class="team-role" data-team-id="${id}" aria-label="Relationship with ${t.name}">
+        ${opt('main', 'Main team')}
+        ${opt('rival', 'Rival')}
+        ${opt('interested', 'Just interested')}
+      </select>
     </label>`;
   }).join('');
 }
@@ -5672,13 +5764,26 @@ async function handleSaveTeams() {
     const { error: deleteError } = await sb.from('user_teams').delete().eq('user_id', user.id);
     if (deleteError) throw deleteError;
 
+    // Read role for each selected team from its dropdown
+    const roleByTeam = {};
+    document.querySelectorAll('#teams-grid .team-role').forEach(sel => {
+      roleByTeam[parseInt(sel.dataset.teamId, 10)] = sel.value;
+    });
+
     if (selectedIds.length) {
-      const rows = selectedIds.map((id, i) => ({ user_id: user.id, team_id: id, display_order: i }));
+      const rows = selectedIds.map((id, i) => ({
+        user_id: user.id,
+        team_id: id,
+        display_order: i,
+        role: roleByTeam[id] || 'interested',
+      }));
       const { error: insertError } = await sb.from('user_teams').insert(rows);
       if (insertError) throw insertError;
     }
 
     savedTeams = selectedIds;
+    savedTeamRoles = {};
+    for (const id of selectedIds) savedTeamRoles[id] = roleByTeam[id] || 'interested';
     updateTeamCountBadge();
     setTeamMessage(`Saved ${selectedIds.length} team${selectedIds.length === 1 ? '' : 's'}.`, 'info');
     setTimeout(closeTeamManager, 900);
