@@ -27,19 +27,42 @@ export default async (req) => {
     if (url.searchParams.get('debug') === 'seatgeek') {
       const clientId = getEnv('SEATGEEK_CLIENT_ID');
       if (!clientId) return Response.json({ error: 'SEATGEEK_CLIENT_ID not set' }, { status: 500 });
-      const slug = url.searchParams.get('slug') || 'mlb-colorado-rockies';
       const today = new Date().toISOString().split('T')[0];
-      const res = await fetch(`https://api.seatgeek.com/2/events?performers.slug=${slug}&client_id=${clientId}&datetime_local.gte=${today}&per_page=3&type=mlb`);
-      const text = await res.text();
-      let parsed;
-      try { parsed = JSON.parse(text); } catch {}
-      return Response.json({
-        status: res.status,
-        slug,
-        totalEvents: parsed?.events?.length ?? null,
-        firstTwoEvents: parsed?.events?.slice(0, 2) ?? null,
-        rawPreview: text.slice(0, 500),
-      });
+
+      const variants = [
+        `performers.slug=mlb-colorado-rockies&type=mlb`,
+        `performers.slug=colorado-rockies`,
+        `performers.slug=colorado-rockies-baseball`,
+        `q=Colorado+Rockies&type=mlb`,
+        `taxonomies.name=mlb&per_page=1`, // discover real slugs from one current MLB event
+      ];
+
+      const attempts = await Promise.all(variants.map(async v => {
+        const u = `https://api.seatgeek.com/2/events?${v}&datetime_local.gte=${today}&per_page=2&client_id=${clientId}`;
+        try {
+          const r = await fetch(u);
+          const text = await r.text();
+          let parsed; try { parsed = JSON.parse(text); } catch {}
+          return {
+            query: v,
+            status: r.status,
+            total: parsed?.meta?.total ?? null,
+            firstEvent: parsed?.events?.[0] ? {
+              id: parsed.events[0].id,
+              title: parsed.events[0].title,
+              type: parsed.events[0].type,
+              datetime_local: parsed.events[0].datetime_local,
+              performers: parsed.events[0].performers?.map(p => ({
+                id: p.id, slug: p.slug, name: p.name, home_team: p.home_team, type: p.type,
+              })),
+            } : null,
+          };
+        } catch (e) {
+          return { query: v, error: String(e.message || e) };
+        }
+      }));
+
+      return Response.json({ today, attempts });
     }
   } catch (e) {
     return Response.json({ debugError: String(e.message || e) }, { status: 500 });
