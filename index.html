@@ -6148,7 +6148,7 @@ async function loadUserProfile(username) {
 
   root.classList.remove('loading');
   root.innerHTML = `${headerHtml}
-    ${crackerJacksHtml}
+    ${crackerJacksHtml ? `<section>${crackerJacksHtml}</section>` : ''}
     <section>
       <div class="user-summary-row">
         <div class="user-summary-card">
