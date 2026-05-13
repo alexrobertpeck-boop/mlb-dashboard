@@ -614,6 +614,99 @@
     .matchup-card { grid-template-columns: 1fr; }
     .matchup-friends { grid-column: 1; }
   }
+
+  /* Cracker jacks prompt on friend profile */
+  .cracker-jacks-prompt {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    background: #fff8e1;
+    border: 1px solid #ffd54f;
+    border-radius: 10px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .cracker-jacks-prompt .ctx {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.92em;
+  }
+  .cracker-jacks-prompt .ctx strong { font-weight: 700; }
+  .cracker-jacks-btn {
+    padding: 10px 16px;
+    border-radius: 6px;
+    border: 1px solid #b9883b;
+    background: #f6c344;
+    color: #3a2710;
+    font-weight: 700;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .cracker-jacks-btn:hover { background: #ecb52f; }
+  .cracker-jacks-btn:disabled { opacity: 0.7; cursor: default; }
+  .cracker-jacks-prompt.thrown { background: #f1f8e9; border-color: #aed581; }
+  .cracker-jacks-prompt.thrown .cracker-jacks-btn {
+    background: transparent;
+    border-color: transparent;
+    color: #2e7d32;
+  }
+
+  /* Notifications button in the nav */
+  .notifications-btn {
+    background: white;
+    border: 1px solid #d0d0d0;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    margin-right: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #333;
+  }
+  .notifications-btn:hover { background: #f5f5f5; }
+  .notifications-badge {
+    background: #c62828;
+    color: white;
+    border-radius: 999px;
+    font-size: 0.78em;
+    font-weight: 700;
+    padding: 1px 7px;
+    margin-left: 2px;
+  }
+
+  /* Notifications list inside the modal */
+  .notification-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #f1f1f1;
+  }
+  .notification-row:last-child { border-bottom: none; }
+  .notification-row.unread { background: #fff8e1; border-radius: 6px; }
+  .notification-icon { font-size: 22px; line-height: 1; }
+  .notification-body { flex: 1; min-width: 0; font-size: 0.9em; line-height: 1.4; }
+  .notification-body a {
+    color: #002D72;
+    text-decoration: none;
+    font-weight: 700;
+  }
+  .notification-time {
+    font-size: 0.78em;
+    color: #888;
+    margin-top: 2px;
+  }
+  .notifications-empty {
+    color: #888;
+    font-style: italic;
+    padding: 24px 8px;
+    text-align: center;
+  }
   .pitcher {
     font-size: 0.68em;
     color: #555;
@@ -2526,6 +2619,15 @@
       <span id="auth-toggle-text">Don't have an account?</span>
       <button type="button" id="auth-toggle-btn">Sign up</button>
     </div>
+  </div>
+</div>
+
+<div class="auth-modal" id="notifications-modal" hidden>
+  <div class="auth-modal-backdrop"></div>
+  <div class="auth-modal-content">
+    <button class="auth-modal-close" id="notifications-modal-close" aria-label="Close">×</button>
+    <h2>Notifications</h2>
+    <div id="notifications-list" class="loading">Loading…</div>
   </div>
 </div>
 
@@ -5461,6 +5563,175 @@ function wireFriendsView() {
   document.getElementById('friend-search-input').addEventListener('input', onFriendSearchInput);
 }
 
+/* ─── Interactions (cracker jacks) ─── */
+
+let unreadInteractionsCount = 0;
+
+async function loadUnreadInteractionsCount(userId) {
+  const { count, error } = await sb.from('interactions')
+    .select('id', { count: 'exact', head: true })
+    .eq('to_user', userId)
+    .is('read_at', null);
+  if (error) { console.error('Notifications count failed:', error); return 0; }
+  return count || 0;
+}
+
+function renderNotificationsBadge() {
+  const btn = document.getElementById('notifications-btn');
+  if (!btn) return;
+  if (unreadInteractionsCount > 0) {
+    btn.innerHTML = `🍿<span class="notifications-badge">${unreadInteractionsCount}</span>`;
+  } else {
+    btn.innerHTML = `🍿`;
+  }
+}
+
+async function getFriendRecentLoss(teamId) {
+  // Most-recent loss in the last 3 days
+  try {
+    const data = await fetchJSON(`${API_BASE}/schedule?sportId=1&teamId=${teamId}&startDate=${isoDate(-3)}&endDate=${isoDate(0)}`);
+    const games = (data.dates || []).flatMap(d => d.games.map(g => ({ ...g, _date: d.date })));
+    // Walk newest → oldest
+    for (let i = games.length - 1; i >= 0; i--) {
+      const g = games[i];
+      if (g.status?.detailedState !== 'Final') continue;
+      const isHome = g.teams.home.team.id === teamId;
+      const myScore = isHome ? g.teams.home.score : g.teams.away.score;
+      const oppScore = isHome ? g.teams.away.score : g.teams.home.score;
+      if (myScore == null || oppScore == null) continue;
+      if (myScore < oppScore) {
+        const oppId = isHome ? g.teams.away.team.id : g.teams.home.team.id;
+        return {
+          gamePk: g.gamePk,
+          date: g._date,
+          myScore, oppScore,
+          oppId,
+          oppName: TEAMS[oppId]?.short || g.teams[isHome ? 'away' : 'home'].team.name,
+        };
+      }
+    }
+  } catch (e) { console.error('Recent loss lookup failed:', e); }
+  return null;
+}
+
+async function checkAlreadyThrown(toUserId, gamePk) {
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return false;
+  const { data } = await sb.from('interactions')
+    .select('id')
+    .eq('from_user', user.id)
+    .eq('to_user', toUserId)
+    .eq('kind', 'cracker_jacks')
+    .eq('context_game_pk', gamePk)
+    .limit(1);
+  return (data?.length || 0) > 0;
+}
+
+async function sendCrackerJacks(toUserId, teamId, gamePk, btn) {
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return;
+  btn.disabled = true;
+  const { error } = await sb.from('interactions').insert({
+    from_user: user.id,
+    to_user: toUserId,
+    kind: 'cracker_jacks',
+    context_team_id: teamId,
+    context_game_pk: gamePk,
+  });
+  if (error) {
+    console.error('Cracker jacks send failed:', error);
+    btn.disabled = false;
+    return;
+  }
+  const prompt = btn.closest('.cracker-jacks-prompt');
+  if (prompt) prompt.classList.add('thrown');
+  btn.textContent = '🍿 Thrown!';
+}
+
+function timeAgo(iso) {
+  const then = new Date(iso).getTime();
+  const sec = Math.floor((Date.now() - then) / 1000);
+  if (sec < 60) return 'just now';
+  if (sec < 3600) return `${Math.floor(sec / 60)} min ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)} hr ago`;
+  const days = Math.floor(sec / 86400);
+  return days === 1 ? 'yesterday' : `${days} days ago`;
+}
+
+async function openNotificationsModal() {
+  const modal = document.getElementById('notifications-modal');
+  modal.hidden = false;
+  document.body.style.overflow = 'hidden';
+  const el = document.getElementById('notifications-list');
+  el.classList.add('loading');
+  el.innerHTML = 'Loading…';
+
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return;
+
+  const { data, error } = await sb.from('interactions')
+    .select('id, from_user, kind, context_team_id, context_game_pk, read_at, created_at')
+    .eq('to_user', user.id)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  el.classList.remove('loading');
+  if (error) {
+    el.innerHTML = '<div class="error">Couldn\'t load notifications.</div>';
+    return;
+  }
+  if (!data?.length) {
+    el.innerHTML = '<div class="notifications-empty">Nothing to see here yet.</div>';
+    return;
+  }
+  const senderIds = [...new Set(data.map(r => r.from_user))];
+  const { data: profiles } = await sb.from('profiles').select('user_id, username, display_name').in('user_id', senderIds);
+  const profileById = {};
+  for (const p of (profiles || [])) profileById[p.user_id] = p;
+
+  el.innerHTML = data.map(r => {
+    const sender = profileById[r.from_user] || { username: '?', display_name: 'Unknown' };
+    const teamName = r.context_team_id ? (TEAMS[r.context_team_id]?.short || 'their team') : 'their team';
+    const senderLink = `<a href="/?user=${encodeURIComponent(sender.username)}">${escapeHtml(sender.display_name || sender.username)}</a>`;
+    let body = '';
+    if (r.kind === 'cracker_jacks') {
+      body = `${senderLink} threw cracker jacks after the ${escapeHtml(teamName)} lost.`;
+    } else {
+      body = `${senderLink} sent you something.`;
+    }
+    return `<div class="notification-row ${r.read_at ? '' : 'unread'}">
+      <div class="notification-icon">🍿</div>
+      <div class="notification-body">
+        ${body}
+        <div class="notification-time">${timeAgo(r.created_at)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Mark all as read (server-side update), then update local badge
+  const unreadIds = data.filter(r => !r.read_at).map(r => r.id);
+  if (unreadIds.length) {
+    await sb.from('interactions').update({ read_at: new Date().toISOString() }).in('id', unreadIds);
+    unreadInteractionsCount = 0;
+    renderNotificationsBadge();
+  }
+}
+
+function closeNotificationsModal() {
+  document.getElementById('notifications-modal').hidden = true;
+  document.body.style.overflow = '';
+}
+
+let notificationsModalWired = false;
+function wireNotificationsModal() {
+  if (notificationsModalWired) return;
+  notificationsModalWired = true;
+  document.querySelector('#notifications-modal .auth-modal-backdrop').addEventListener('click', closeNotificationsModal);
+  document.getElementById('notifications-modal-close').addEventListener('click', closeNotificationsModal);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('notifications-modal').hidden) closeNotificationsModal();
+  });
+}
+
 /* ─── Friend matchups (on landing) ─── */
 
 async function loadFriendMatchups() {
@@ -5626,6 +5897,30 @@ async function loadUserProfile(username) {
     if (teamsByRole[role]) teamsByRole[role].push(row.team_id);
   }
 
+  // Cracker jacks prompt — only on a friend's profile (not your own), and only
+  // if their main team has lost in the last 3 days
+  let crackerJacksHtml = '';
+  if (!isOwner && teamsByRole.main.length) {
+    const mainTeamId = teamsByRole.main[0];
+    const loss = await getFriendRecentLoss(mainTeamId);
+    if (loss) {
+      const alreadyThrown = await checkAlreadyThrown(friendId, loss.gamePk);
+      const teamName = TEAMS[mainTeamId]?.short || 'team';
+      const dateStr = new Date(loss.date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      crackerJacksHtml = `<div class="cracker-jacks-prompt ${alreadyThrown ? 'thrown' : ''}">
+        <div class="ctx">
+          <strong>${escapeHtml(teamName)} lost ${loss.myScore}–${loss.oppScore}</strong>
+          to the ${escapeHtml(loss.oppName)} on ${dateStr}.
+        </div>
+        <button class="cracker-jacks-btn" id="cracker-jacks-btn"
+                data-to="${friendId}" data-team="${mainTeamId}" data-game="${loss.gamePk}"
+                ${alreadyThrown ? 'disabled' : ''}>
+          ${alreadyThrown ? '🍿 Thrown!' : '🍿 Throw cracker jacks'}
+        </button>
+      </div>`;
+    }
+  }
+
   // Derived sets — stadiums + teams seen include game-derived
   const derivedStadiums = new Set(friendStadiums);
   const derivedTeamsAll = new Set(friendTeams);
@@ -5637,6 +5932,7 @@ async function loadUserProfile(username) {
 
   root.classList.remove('loading');
   root.innerHTML = `${headerHtml}
+    ${crackerJacksHtml}
     <div class="user-summary-row">
       <div class="user-summary-card">
         <div class="user-summary-label">Stadiums Visited</div>
@@ -5665,6 +5961,14 @@ async function loadUserProfile(username) {
     </section>`;
 
   wireUserProfileFollowBtn(username);
+
+  // Cracker-jacks button click
+  const cjBtn = document.getElementById('cracker-jacks-btn');
+  if (cjBtn && !cjBtn.disabled) {
+    cjBtn.addEventListener('click', () => {
+      sendCrackerJacks(cjBtn.dataset.to, parseInt(cjBtn.dataset.team, 10), parseInt(cjBtn.dataset.game, 10), cjBtn);
+    });
+  }
 
   // Reuse the existing renderers with the friend's data
   renderPennants('user-pennants', {
@@ -5733,10 +6037,13 @@ function renderAuthArea(user) {
   if (user) {
     el.innerHTML = `
       <div class="auth-user-info">
+        <button class="notifications-btn" id="notifications-btn" aria-label="Notifications">🍿</button>
         <button class="my-teams-btn" id="my-teams-btn">My Teams<span class="my-teams-count" id="my-teams-count"></span></button>
         <button class="auth-logout-btn" id="auth-logout-btn">Log out</button>
       </div>
     `;
+    document.getElementById('notifications-btn').addEventListener('click', openNotificationsModal);
+    renderNotificationsBadge();
     document.getElementById('auth-logout-btn').addEventListener('click', async () => {
       await sb.auth.signOut();
     });
@@ -5973,6 +6280,7 @@ async function init() {
   wireTeamManager();
   wireInfoIcons();
   wireProfileSetupModal();
+  wireNotificationsModal();
 
   // Resolve auth + saved teams before deciding which view to render.
   // Both wrapped: a hung Supabase shouldn't leave the whole page in "Loading…".
@@ -5993,6 +6301,10 @@ async function init() {
       // until they save.
       if (!currentProfile) showProfileSetupModal();
     } catch (err) { console.error('Profile load failed:', err); }
+    try {
+      unreadInteractionsCount = await loadUnreadInteractionsCount(user.id);
+      renderNotificationsBadge();
+    } catch (err) { console.error('Notifications count failed:', err); }
   }
 
   const params = new URL(window.location.href).searchParams;
