@@ -3076,7 +3076,11 @@ async function loadTeamPulse() {
   const dateLabel = pulseDateLabel(data.generatedAt);
   if (heading) heading.innerHTML = `Team Pulse: ${escapeHtml(dateLabel)} <span class="ai-badge">AI</span>`;
 
-  const paragraphs = (data.summary || '').split(/\n\n+/).filter(Boolean)
+  // Strip markdown heading lines defensively in case Claude slipped one in
+  // despite the prompt telling it not to.
+  const paragraphs = (data.summary || '').split(/\n\n+/)
+    .map(p => p.replace(/^#{1,6}\s+.*(?:\n|$)/gm, '').trim())
+    .filter(Boolean)
     .map(p => `<p>${renderPulseProse(p)}</p>`).join('');
 
   el.innerHTML = `
@@ -3866,7 +3870,11 @@ async function loadMlbPulse() {
   const dateLabel = pulseDateLabel(data.generated_at);
   if (heading) heading.innerHTML = `MLB Pulse: ${escapeHtml(dateLabel)} <span class="ai-badge">AI</span>`;
 
-  const paragraphs = (data.summary || '').split(/\n\n+/).filter(Boolean)
+  // Strip markdown heading lines defensively in case Claude slipped one in
+  // despite the prompt telling it not to.
+  const paragraphs = (data.summary || '').split(/\n\n+/)
+    .map(p => p.replace(/^#{1,6}\s+.*(?:\n|$)/gm, '').trim())
+    .filter(Boolean)
     .map(p => `<p>${renderPulseProse(p)}</p>`).join('');
   el.innerHTML = `
     <div class="mlb-pulse-content">${paragraphs}</div>
