@@ -3299,6 +3299,10 @@ async function loadRecordContext() {
     }
   }
 
+  const pythInfo = "Pythagorean W%. The record a team 'should' have based on runs scored vs. runs allowed (Bill James's formula). If higher than actual, the team is getting unlucky and may be undervalued; lower means it's overperforming its run differential.";
+  const oppInfo  = "Average winning percentage of the teams this team has actually faced in completed games. Below .500 means a soft schedule (wins may be inflated); above means a tough one (record may understate the team).";
+  const sosInfo  = "Rest-of-Schedule Strength of Schedule — average winning percentage of the opponents this team still has to play. Forward-looking, from FanGraphs.";
+
   el.innerHTML = `
     <div class="context-grid">
       <div class="context-card">
@@ -3308,21 +3312,22 @@ async function loadRecordContext() {
       </div>
       <div class="context-card">
         <div class="context-card-value">${fmt3(pythPct)}</div>
-        <div class="context-card-label">Pythagorean W%</div>
+        <div class="context-card-label">Pythagorean W%${infoIconHtml(pythInfo)}</div>
         <div class="context-card-sub ${pythSubCls}">${pythSub}</div>
       </div>
       <div class="context-card">
         <div class="context-card-value">${fmt3(oppPct)}</div>
-        <div class="context-card-label">Opp Win %</div>
+        <div class="context-card-label">Opp Win %${infoIconHtml(oppInfo)}</div>
         <div class="context-card-sub ${oppMeta.cls}">${oppMeta.text}</div>
       </div>
       <div class="context-card">
         <div class="context-card-value">${fmt3(sos)}</div>
-        <div class="context-card-label">ROS SOS</div>
+        <div class="context-card-label">ROS SOS${infoIconHtml(sosInfo)}</div>
         <div class="context-card-sub ${sosMeta.cls}">${sosMeta.text}</div>
       </div>
     </div>
   `;
+  wireInfoIcons();
 }
 
 async function loadPlayoffOdds() {
