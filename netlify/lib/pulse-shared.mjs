@@ -272,6 +272,7 @@ export function fanGraphsRowToDbRow(t, snapshotDate) {
     division_pct: clamp01(e.divTitle),
     wildcard_pct: clamp01(e.wcTitle),
     ws_pct: clamp01(e.wsWin),
+    sos: e.sos != null ? Math.round(Number(e.sos) * 10000) / 10000 : null,
   };
 }
 

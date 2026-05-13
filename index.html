@@ -483,6 +483,42 @@
     text-align: center;
   }
   .odds-projection strong { color: var(--team-primary); }
+  /* ─── Record Context ─── */
+  .context-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  .context-card {
+    background: #fafafa;
+    border: 1px solid #ececec;
+    border-radius: 10px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+  .context-card-value {
+    font-size: 1.75em;
+    font-weight: 800;
+    color: var(--team-primary);
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+  .context-card-label {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 700;
+    color: #777;
+    margin-top: 8px;
+  }
+  .context-card-sub {
+    font-size: 0.78em;
+    color: #888;
+    margin-top: 3px;
+  }
+  .context-card-sub.tough { color: #c62828; }
+  .context-card-sub.easy  { color: #2e7d32; }
+
   .odds-chart-wrap {
     margin-top: 22px;
     padding: 18px 4px 12px;
@@ -2101,6 +2137,11 @@
   </section>
 
   <section>
+    <h2>Record Context</h2>
+    <div id="record-context" class="loading">Loading…</div>
+  </section>
+
+  <section>
     <h2>Playoff Outlook</h2>
     <div id="playoff-odds" class="loading">Loading…</div>
   </section>
@@ -3170,6 +3211,112 @@ async function loadStandings() {
 }
 
 /* ─── Playoff odds ─── */
+
+async function loadRecordContext() {
+  const season = new Date().getFullYear();
+  // 3 fetches in parallel: standings (R/RA for Pyth, opponent win%s),
+  // full season schedule (to enumerate completed opponents),
+  // and the latest playoff_odds row to read FanGraphs SOS.
+  const [standingsData, scheduleData, oddsRes] = await Promise.all([
+    fetchJSON(`${API_BASE}/standings?leagueId=103,104&season=${season}&hydrate=team(stats(group=[hitting,pitching],type=season))`),
+    fetchJSON(`${API_BASE}/schedule?sportId=1&teamId=${currentTeamId}&startDate=${season}-03-01&endDate=${season}-11-15`),
+    sb.from('playoff_odds').select('sos, snapshot_date').eq('team_id', currentTeamId).order('snapshot_date', { ascending: false }).limit(1),
+  ]);
+
+  // Map team_id → win% and find this team's record
+  const winPctByTeam = {};
+  let myRecord = null;
+  for (const div of standingsData.records || []) {
+    for (const t of div.teamRecords) {
+      const pct = parseFloat(t.winningPercentage);
+      winPctByTeam[t.team.id] = pct;
+      if (t.team.id === currentTeamId) {
+        myRecord = { wins: t.wins, losses: t.losses, pct };
+        // Try to pull R/RA from hydrated team stats
+        const groups = t.team?.teamStats || [];
+        for (const g of groups) {
+          const split = g.splits?.[0]?.stat;
+          if (!split) continue;
+          if (g.group?.displayName === 'hitting')  myRecord.runsScored = split.runs ?? null;
+          if (g.group?.displayName === 'pitching') myRecord.runsAllowed = split.runs ?? null;
+        }
+      }
+    }
+  }
+
+  const el = document.getElementById('record-context');
+  el.classList.remove('loading');
+  if (!myRecord) { el.innerHTML = '<div class="error">Couldn\'t find team in standings.</div>'; return; }
+
+  // Pythagorean Win%
+  let pythPct = null;
+  if (myRecord.runsScored != null && myRecord.runsAllowed != null && myRecord.runsScored + myRecord.runsAllowed > 0) {
+    const rs = myRecord.runsScored, ra = myRecord.runsAllowed;
+    pythPct = (rs * rs) / (rs * rs + ra * ra);
+  }
+
+  // Played-Opponent Win%: average opponent win% across completed games
+  const allGames = (scheduleData.dates || []).flatMap(d => d.games || []);
+  const completed = allGames.filter(g => g.status?.detailedState === 'Final');
+  let sumOppPct = 0, oppCount = 0;
+  for (const g of completed) {
+    const isHome = g.teams.home.team.id === currentTeamId;
+    const oppId = (isHome ? g.teams.away : g.teams.home).team.id;
+    const oppPct = winPctByTeam[oppId];
+    if (oppPct != null && !isNaN(oppPct)) { sumOppPct += oppPct; oppCount++; }
+  }
+  const oppPct = oppCount ? sumOppPct / oppCount : null;
+
+  const sosRow = oddsRes?.data?.[0];
+  const sos = sosRow?.sos ?? null;
+
+  const fmt3 = v => v == null ? '—' : v.toFixed(3).replace(/^0/, '');
+  const fmtSched = v => {
+    if (v == null) return { text: '—', cls: '' };
+    if (v >= 0.520) return { text: 'tough schedule', cls: 'tough' };
+    if (v <= 0.480) return { text: 'soft schedule', cls: 'easy' };
+    return { text: 'balanced schedule', cls: '' };
+  };
+
+  const oppMeta = fmtSched(oppPct);
+  const sosMeta = fmtSched(sos);
+
+  // Pyth vs actual delta — green if Pyth higher (record undersells), red if lower
+  let pythSub = 'based on run differential';
+  let pythSubCls = '';
+  if (pythPct != null) {
+    const diff = (pythPct - myRecord.pct) * 1000;
+    if (Math.abs(diff) >= 15) {
+      pythSub = diff > 0 ? `${Math.round(Math.abs(diff))} pts better than record` : `${Math.round(Math.abs(diff))} pts worse than record`;
+      pythSubCls = diff > 0 ? 'easy' : 'tough';
+    }
+  }
+
+  el.innerHTML = `
+    <div class="context-grid">
+      <div class="context-card">
+        <div class="context-card-value">${myRecord.wins}-${myRecord.losses}</div>
+        <div class="context-card-label">Actual Record</div>
+        <div class="context-card-sub">${fmt3(myRecord.pct)} win pct</div>
+      </div>
+      <div class="context-card">
+        <div class="context-card-value">${fmt3(pythPct)}</div>
+        <div class="context-card-label">Pythagorean W%</div>
+        <div class="context-card-sub ${pythSubCls}">${pythSub}</div>
+      </div>
+      <div class="context-card">
+        <div class="context-card-value">${fmt3(oppPct)}</div>
+        <div class="context-card-label">Opp Win %</div>
+        <div class="context-card-sub ${oppMeta.cls}">${oppMeta.text}</div>
+      </div>
+      <div class="context-card">
+        <div class="context-card-value">${fmt3(sos)}</div>
+        <div class="context-card-label">ROS SOS</div>
+        <div class="context-card-sub ${sosMeta.cls}">${sosMeta.text}</div>
+      </div>
+    </div>
+  `;
+}
 
 async function loadPlayoffOdds() {
   const { data: history, error } = await sb.from('playoff_odds')
@@ -4914,6 +5061,7 @@ async function init() {
     ['injuries',        loadInjuries],
     ['trades',          loadTrades],
     ['heatmap',         loadHeatmap],
+    ['record-context',  loadRecordContext],
     ['season-hitting',  loadSeasonHitting],
     ['season-pitching', loadSeasonPitching],
     ...(user ? [['team-pulse', loadTeamPulse]] : []),
