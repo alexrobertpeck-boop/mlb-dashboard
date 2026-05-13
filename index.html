@@ -563,6 +563,57 @@
     color: #444;
   }
   .user-teams-logo img { width: 28px; height: 28px; object-fit: contain; }
+
+  /* Friend matchups (on landing) */
+  .matchup-card {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+    background: #fafafa;
+    border: 1px solid #ececec;
+    border-radius: 10px;
+    border-left: 4px solid #002D72;
+  }
+  .matchup-card + .matchup-card { margin-top: 10px; }
+  .matchup-date {
+    font-size: 0.78em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+    color: #555;
+  }
+  .matchup-game {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+  }
+  .matchup-game img { width: 28px; height: 28px; object-fit: contain; }
+  .matchup-game .vs { color: #888; font-weight: 400; margin: 0 4px; }
+  .matchup-friends {
+    grid-column: 2;
+    font-size: 0.88em;
+    color: #555;
+  }
+  .matchup-friends a {
+    color: #002D72;
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .matchup-friends a:hover { text-decoration: underline; }
+  .matchup-tag {
+    font-size: 0.75em;
+    color: #888;
+    margin-left: 3px;
+  }
+  .matchup-tag.main  { color: #2e7d32; font-weight: 600; }
+  .matchup-tag.rival { color: #c62828; font-weight: 600; }
+  @media (max-width: 600px) {
+    .matchup-card { grid-template-columns: 1fr; }
+    .matchup-friends { grid-column: 1; }
+  }
   .pitcher {
     font-size: 0.68em;
     color: #555;
@@ -2272,6 +2323,11 @@
     <section>
       <h2>MLB Pulse <span class="ai-badge">AI</span></h2>
       <div id="mlb-pulse" class="loading">Loading…</div>
+    </section>
+
+    <section id="friend-matchups-section">
+      <h2>Friend Matchups</h2>
+      <div id="friend-matchups" class="loading">Loading…</div>
     </section>
 
     <section>
@@ -4178,6 +4234,7 @@ async function loadMlbPulse() {
 async function loadLanding() {
   // Around-MLB sections always load — independent of saved teams
   loadMlbPulse().catch(showError('mlb-pulse'));
+  loadFriendMatchups().catch(showError('friend-matchups'));
   loadMlbOverview().catch(showError('mlb-overview'));
   loadLeagueHitting().catch(showError('league-hitting'));
   loadLeaguePitching().catch(showError('league-pitching'));
@@ -5400,6 +5457,96 @@ function wireFriendsView() {
   if (friendsViewWired) return;
   friendsViewWired = true;
   document.getElementById('friend-search-input').addEventListener('input', onFriendSearchInput);
+}
+
+/* ─── Friend matchups (on landing) ─── */
+
+async function loadFriendMatchups() {
+  const el = document.getElementById('friend-matchups');
+  if (!el) return;
+  el.classList.remove('loading');
+
+  // Pick a main team — first one tagged 'main' wins
+  const mainEntry = Object.entries(savedTeamRoles).find(([, role]) => role === 'main');
+  if (!mainEntry) {
+    el.innerHTML = '<div class="empty-note">Tag a team as your Main in <strong>My Teams</strong> to see matchups with friends\' teams.</div>';
+    return;
+  }
+  const mainTeamId = parseInt(mainEntry[0], 10);
+  const mainTeam = TEAMS[mainTeamId];
+
+  await loadFollowGraph();
+  if (followingSet.size === 0) {
+    el.innerHTML = '<div class="empty-note">Follow some friends to see when their teams play your ' + escapeHtml(mainTeam?.short || 'main team') + '.</div>';
+    return;
+  }
+
+  const followedIds = [...followingSet];
+  const [profilesRes, friendTeamsRes, scheduleData] = await Promise.all([
+    sb.from('profiles').select('user_id, username, display_name').in('user_id', followedIds),
+    sb.from('user_teams').select('user_id, team_id, role').in('user_id', followedIds),
+    fetchJSON(`${API_BASE}/schedule?sportId=1&teamId=${mainTeamId}&startDate=${isoDate(0)}&endDate=${isoDate(14)}`),
+  ]);
+
+  const profileById = {};
+  for (const p of (profilesRes.data || [])) profileById[p.user_id] = p;
+
+  // Build map: team_id → friends who follow that team
+  const friendsByTeam = {};
+  for (const row of (friendTeamsRes.data || [])) {
+    const profile = profileById[row.user_id];
+    if (!profile) continue;
+    if (!friendsByTeam[row.team_id]) friendsByTeam[row.team_id] = [];
+    friendsByTeam[row.team_id].push({ ...profile, role: row.role });
+  }
+
+  // Walk upcoming games; flag any where the opponent is in a friend's followed set
+  const allGames = (scheduleData.dates || []).flatMap(d => d.games.map(g => ({ ...g, _date: d.date })));
+  const matchups = [];
+  for (const g of allGames) {
+    if (g.status?.abstractGameState !== 'Preview') continue;
+    const isHome = g.teams.home.team.id === mainTeamId;
+    const oppId = isHome ? g.teams.away.team.id : g.teams.home.team.id;
+    const friends = friendsByTeam[oppId];
+    if (!friends || !friends.length) continue;
+    matchups.push({
+      date: g._date,
+      isHome,
+      oppId,
+      friends,
+    });
+  }
+
+  if (matchups.length === 0) {
+    el.innerHTML = '<div class="empty-note">No matchups in the next two weeks where your friends follow ' + escapeHtml(mainTeam?.short || 'main team') + '\'s opponent.</div>';
+    return;
+  }
+
+  el.innerHTML = matchups.map(m => {
+    const dateLabel = new Date(m.date + 'T12:00:00').toLocaleDateString(undefined, {
+      weekday: 'short', month: 'short', day: 'numeric',
+    });
+    const oppTeam = TEAMS[m.oppId];
+    const oppName = escapeHtml(oppTeam?.short || 'Opponent');
+    const myName = escapeHtml(mainTeam?.short || 'You');
+    const matchupLine = m.isHome
+      ? `${myName} <span class="vs">vs</span> ${oppName}`
+      : `${myName} <span class="vs">@</span> ${oppName}`;
+    const friendsLine = m.friends.map(f => {
+      const tag = f.role === 'main' ? '<span class="matchup-tag main">main</span>'
+                : f.role === 'rival' ? '<span class="matchup-tag rival">rival</span>'
+                : '<span class="matchup-tag">follows</span>';
+      return `<a href="/?user=${encodeURIComponent(f.username)}">${escapeHtml(f.display_name || f.username)}</a> ${tag}`;
+    }).join(', ');
+    return `<div class="matchup-card">
+      <div class="matchup-date">${dateLabel}</div>
+      <div class="matchup-game">
+        <img src="https://www.mlbstatic.com/team-logos/${m.oppId}.svg" alt="${escapeHtml(oppTeam?.abbr || '')}" onerror="this.style.visibility='hidden'">
+        <span>${matchupLine}</span>
+      </div>
+      <div class="matchup-friends">${friendsLine}</div>
+    </div>`;
+  }).join('');
 }
 
 /* ─── User profile view ─── */
