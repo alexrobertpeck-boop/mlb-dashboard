@@ -3259,10 +3259,13 @@ async function loadRecordContext() {
     console.warn('Record Context: missing R/RA for Pyth', { runsScored, runsAllowed, statsData });
   }
 
-  // Played-Opponent Win%: compute for ALL 30 teams from the bulk schedule
+  // Played-Opponent Win%: compute for ALL 30 teams from the bulk schedule.
+  // Restrict to regular-season games (gameType 'R') so spring training and
+  // exhibitions against minor-league/WBC opponents don't pollute the counts.
   const oppAcc = {}; // team_id -> { sum, count }
   for (const dateBlock of allGamesData.dates || []) {
     for (const g of dateBlock.games || []) {
+      if (g.gameType !== 'R') continue;
       if (g.status?.detailedState !== 'Final') continue;
       const homeId = g.teams.home.team.id;
       const awayId = g.teams.away.team.id;
@@ -3280,9 +3283,10 @@ async function loadRecordContext() {
       }
     }
   }
+  // Clamp to the 30 MLB teams — anything else is a non-roster opponent
   const oppPctByTeam = {};
   for (const [tid, { sum, count }] of Object.entries(oppAcc)) {
-    if (count > 0) oppPctByTeam[tid] = sum / count;
+    if (count > 0 && winPctByTeam[tid] != null) oppPctByTeam[tid] = sum / count;
   }
   const oppPct = oppPctByTeam[currentTeamId] ?? null;
 
