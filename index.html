@@ -5490,7 +5490,7 @@ async function init() {
   if (user && viewFromUrl === 'attendance') view = 'attendance';
   else if (user && viewFromUrl === 'friends') view = 'friends';
   else if (TEAMS[teamFromUrl])               view = 'team';
-  else if (user && savedTeams.length > 0)    view = 'landing';
+  else if (user)                              view = 'landing';
   else                                        view = 'team';
 
   const main = document.querySelector('main');
