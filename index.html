@@ -3214,13 +3214,14 @@ async function loadStandings() {
 
 async function loadRecordContext() {
   const season = new Date().getFullYear();
-  // 3 fetches in parallel: standings (R/RA for Pyth, opponent win%s),
-  // full season schedule (to enumerate completed opponents),
-  // and the latest playoff_odds row to read FanGraphs SOS.
-  const [standingsData, scheduleData, oddsRes] = await Promise.all([
-    fetchJSON(`${API_BASE}/standings?leagueId=103,104&season=${season}&hydrate=team(stats(group=[hitting,pitching],type=season))`),
+  // 4 fetches in parallel: standings (record + opponent win%s), full schedule
+  // (to enumerate completed opponents), latest playoff_odds row (for SOS),
+  // and team season stats (for Pythagorean's R/RA).
+  const [standingsData, scheduleData, oddsRes, statsData] = await Promise.all([
+    fetchJSON(`${API_BASE}/standings?leagueId=103,104&season=${season}`),
     fetchJSON(`${API_BASE}/schedule?sportId=1&teamId=${currentTeamId}&startDate=${season}-03-01&endDate=${season}-11-15`),
     sb.from('playoff_odds').select('sos, snapshot_date').eq('team_id', currentTeamId).order('snapshot_date', { ascending: false }).limit(1),
+    fetchJSON(`${API_BASE}/teams/${currentTeamId}/stats?stats=season&group=hitting,pitching&season=${season}`),
   ]);
 
   // Map team_id → win% and find this team's record
@@ -3232,16 +3233,18 @@ async function loadRecordContext() {
       winPctByTeam[t.team.id] = pct;
       if (t.team.id === currentTeamId) {
         myRecord = { wins: t.wins, losses: t.losses, pct };
-        // Try to pull R/RA from hydrated team stats
-        const groups = t.team?.teamStats || [];
-        for (const g of groups) {
-          const split = g.splits?.[0]?.stat;
-          if (!split) continue;
-          if (g.group?.displayName === 'hitting')  myRecord.runsScored = split.runs ?? null;
-          if (g.group?.displayName === 'pitching') myRecord.runsAllowed = split.runs ?? null;
-        }
       }
     }
+  }
+
+  // R/RA from team season stats endpoint
+  let runsScored = null, runsAllowed = null;
+  for (const g of statsData?.stats || []) {
+    const stat = g.splits?.[0]?.stat;
+    if (!stat) continue;
+    const name = g.group?.displayName;
+    if (name === 'hitting')  runsScored  = stat.runs ?? null;
+    if (name === 'pitching') runsAllowed = stat.runs ?? null;
   }
 
   const el = document.getElementById('record-context');
@@ -3250,9 +3253,10 @@ async function loadRecordContext() {
 
   // Pythagorean Win%
   let pythPct = null;
-  if (myRecord.runsScored != null && myRecord.runsAllowed != null && myRecord.runsScored + myRecord.runsAllowed > 0) {
-    const rs = myRecord.runsScored, ra = myRecord.runsAllowed;
-    pythPct = (rs * rs) / (rs * rs + ra * ra);
+  if (runsScored != null && runsAllowed != null && runsScored + runsAllowed > 0) {
+    pythPct = (runsScored * runsScored) / (runsScored * runsScored + runsAllowed * runsAllowed);
+  } else {
+    console.warn('Record Context: missing R/RA for Pyth', { runsScored, runsAllowed, statsData });
   }
 
   // Played-Opponent Win%: average opponent win% across completed games
@@ -3269,6 +3273,9 @@ async function loadRecordContext() {
 
   const sosRow = oddsRes?.data?.[0];
   const sos = sosRow?.sos ?? null;
+  if (sosRow && sos == null) {
+    console.warn('Record Context: playoff_odds row found but sos is null. Re-run backfill after Netlify deploy completes.', sosRow);
+  }
 
   const fmt3 = v => v == null ? '—' : v.toFixed(3).replace(/^0/, '');
   const fmtSched = v => {
