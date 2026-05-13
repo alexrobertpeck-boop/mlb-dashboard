@@ -339,6 +339,9 @@
   .ticket-link:hover {
     background: rgba(var(--team-primary-rgb), 0.18);
   }
+  .pitcher.pitcher-empty {
+    visibility: hidden;
+  }
   .pitcher {
     font-size: 0.68em;
     color: #555;
@@ -2473,16 +2476,19 @@ function renderGame(g, localDate) {
   }
   if (!resultHtml) resultHtml = '<div class="result"></div>';
 
-  const pitcherBlock = i.teamPitcher?.fullName
-    ? `<div class="pitcher" title="${i.teamPitcher.fullName}">${shortName(i.teamPitcher.fullName)}</div>`
-    : '';
-
   // Ticket link: only for upcoming games (not Final / Postponed / Cancelled / Suspended / Live).
   const upcoming = i.state !== 'Final'
     && i.state !== 'Postponed'
     && i.state !== 'Cancelled'
     && i.state !== 'Suspended'
     && i.abstractState !== 'Live';
+
+  // Reserve the pitcher slot on upcoming games even when the probable pitcher
+  // isn't known yet, so the ticket link below sits at a consistent vertical
+  // position across the calendar row.
+  const pitcherBlock = i.teamPitcher?.fullName
+    ? `<div class="pitcher" title="${i.teamPitcher.fullName}">${shortName(i.teamPitcher.fullName)}</div>`
+    : (upcoming ? `<div class="pitcher pitcher-empty" aria-hidden="true">&nbsp;</div>` : '');
   const homeId = g.teams.home.team.id;
   const ticket = upcoming && localDate ? scheduleTicketsByKey[`${homeId}_${localDate}`] : null;
   const ticketHtml = ticket
