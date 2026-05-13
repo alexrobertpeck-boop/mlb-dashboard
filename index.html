@@ -5645,19 +5645,19 @@ function spawnPopcornShower() {
   const rect = btn.getBoundingClientRect();
   const cx = rect.left + rect.width / 2;
   const cy = rect.bottom;
-  const count = Math.min(6, 3 + unreadInteractionsCount);
+  const count = Math.min(12, 6 + unreadInteractionsCount * 2);
   for (let i = 0; i < count; i++) {
     setTimeout(() => {
       const p = document.createElement('div');
       p.className = 'popcorn-fall';
       p.textContent = '🍿';
-      p.style.left = `${cx + (Math.random() - 0.5) * 30 - 9}px`;
+      p.style.left = `${cx + (Math.random() - 0.5) * 40 - 9}px`;
       p.style.top  = `${cy + 2}px`;
-      p.style.setProperty('--drift', `${(Math.random() - 0.5) * 60}px`);
+      p.style.setProperty('--drift', `${(Math.random() - 0.5) * 80}px`);
       p.style.setProperty('--spin', `${(Math.random() - 0.5) * 540}deg`);
       document.body.appendChild(p);
       setTimeout(() => p.remove(), 1900);
-    }, i * 160);
+    }, i * 100);
   }
 }
 
