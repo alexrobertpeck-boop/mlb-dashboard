@@ -4965,12 +4965,14 @@ function renderAttendanceStats() {
 }
 
 async function loadAttendance() {
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return;
   const [stadiumsRes, gamesRes, seenTeamsRes, bucketRes, seenPlayersRes] = await Promise.all([
-    sb.from('attended_stadiums').select('team_id'),
-    sb.from('attended_games').select('*').order('game_date', { ascending: false }),
-    sb.from('seen_teams').select('team_id'),
-    sb.from('bucket_list_players').select('*').order('added_at', { ascending: false }),
-    sb.from('seen_players').select('*'),
+    sb.from('attended_stadiums').select('team_id').eq('user_id', user.id),
+    sb.from('attended_games').select('*').eq('user_id', user.id).order('game_date', { ascending: false }),
+    sb.from('seen_teams').select('team_id').eq('user_id', user.id),
+    sb.from('bucket_list_players').select('*').eq('user_id', user.id).order('added_at', { ascending: false }),
+    sb.from('seen_players').select('*').eq('user_id', user.id),
   ]);
   if (stadiumsRes.error) { console.error('Stadiums load failed:', stadiumsRes.error); visitedStadiums = new Set(); }
   else { visitedStadiums = new Set(stadiumsRes.data.map(r => r.team_id)); }
@@ -5848,8 +5850,11 @@ sb.auth.onAuthStateChange((event, session) => {
 /* ─── Team manager (saved teams in Supabase) ─── */
 
 async function loadSavedTeams() {
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) { savedTeams = []; savedTeamRoles = {}; updateTeamCountBadge(); return; }
   const { data, error } = await sb.from('user_teams')
     .select('team_id, role')
+    .eq('user_id', user.id)
     .order('display_order', { ascending: true });
   if (error) { console.error('Error loading saved teams:', error); return; }
   savedTeams = data.map(r => r.team_id);
