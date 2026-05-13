@@ -3214,13 +3214,13 @@ async function loadStandings() {
 
 async function loadRecordContext() {
   const season = new Date().getFullYear();
-  // 4 fetches in parallel: standings (record + opponent win%s), full schedule
-  // (to enumerate completed opponents), latest playoff_odds row (for SOS),
-  // and team season stats (for Pythagorean's R/RA).
-  const [standingsData, scheduleData, oddsRes, statsData] = await Promise.all([
+  // Bulk schedule (all 30 teams) + standings + odds for all teams + team stats.
+  // The bulk schedule lets us compute Opp Win % for every team in one pass,
+  // so we can rank the current team against the league.
+  const [standingsData, allGamesData, oddsRes, statsData] = await Promise.all([
     fetchJSON(`${API_BASE}/standings?leagueId=103,104&season=${season}`),
-    fetchJSON(`${API_BASE}/schedule?sportId=1&teamId=${currentTeamId}&startDate=${season}-03-01&endDate=${season}-11-15`),
-    sb.from('playoff_odds').select('sos, snapshot_date').eq('team_id', currentTeamId).order('snapshot_date', { ascending: false }).limit(1),
+    fetchJSON(`${API_BASE}/schedule?sportId=1&startDate=${season}-03-01&endDate=${season}-11-15`),
+    sb.from('playoff_odds').select('team_id, sos, snapshot_date').order('snapshot_date', { ascending: false }).limit(60),
     fetchJSON(`${API_BASE}/teams/${currentTeamId}/stats?stats=season&group=hitting,pitching&season=${season}`),
   ]);
 
@@ -3259,34 +3259,64 @@ async function loadRecordContext() {
     console.warn('Record Context: missing R/RA for Pyth', { runsScored, runsAllowed, statsData });
   }
 
-  // Played-Opponent Win%: average opponent win% across completed games
-  const allGames = (scheduleData.dates || []).flatMap(d => d.games || []);
-  const completed = allGames.filter(g => g.status?.detailedState === 'Final');
-  let sumOppPct = 0, oppCount = 0;
-  for (const g of completed) {
-    const isHome = g.teams.home.team.id === currentTeamId;
-    const oppId = (isHome ? g.teams.away : g.teams.home).team.id;
-    const oppPct = winPctByTeam[oppId];
-    if (oppPct != null && !isNaN(oppPct)) { sumOppPct += oppPct; oppCount++; }
+  // Played-Opponent Win%: compute for ALL 30 teams from the bulk schedule
+  const oppAcc = {}; // team_id -> { sum, count }
+  for (const dateBlock of allGamesData.dates || []) {
+    for (const g of dateBlock.games || []) {
+      if (g.status?.detailedState !== 'Final') continue;
+      const homeId = g.teams.home.team.id;
+      const awayId = g.teams.away.team.id;
+      const awayPct = winPctByTeam[awayId];
+      const homePct = winPctByTeam[homeId];
+      if (awayPct != null && !isNaN(awayPct)) {
+        oppAcc[homeId] ||= { sum: 0, count: 0 };
+        oppAcc[homeId].sum += awayPct;
+        oppAcc[homeId].count++;
+      }
+      if (homePct != null && !isNaN(homePct)) {
+        oppAcc[awayId] ||= { sum: 0, count: 0 };
+        oppAcc[awayId].sum += homePct;
+        oppAcc[awayId].count++;
+      }
+    }
   }
-  const oppPct = oppCount ? sumOppPct / oppCount : null;
+  const oppPctByTeam = {};
+  for (const [tid, { sum, count }] of Object.entries(oppAcc)) {
+    if (count > 0) oppPctByTeam[tid] = sum / count;
+  }
+  const oppPct = oppPctByTeam[currentTeamId] ?? null;
 
-  const sosRow = oddsRes?.data?.[0];
-  const sos = sosRow?.sos ?? null;
-  if (sosRow && sos == null) {
-    console.warn('Record Context: playoff_odds row found but sos is null. Re-run backfill after Netlify deploy completes.', sosRow);
+  // SOS for all teams at the latest snapshot date
+  const sosByTeam = {};
+  let sos = null;
+  const latestSnap = oddsRes?.data?.[0]?.snapshot_date;
+  if (latestSnap) {
+    for (const row of oddsRes.data) {
+      if (row.snapshot_date === latestSnap && row.sos != null) {
+        sosByTeam[row.team_id] = row.sos;
+      }
+    }
+    sos = sosByTeam[currentTeamId] ?? null;
   }
 
   const fmt3 = v => v == null ? '—' : v.toFixed(3).replace(/^0/, '');
-  const fmtSched = v => {
-    if (v == null) return { text: '—', cls: '' };
-    if (v >= 0.520) return { text: 'tough schedule', cls: 'tough' };
-    if (v <= 0.480) return { text: 'soft schedule', cls: 'easy' };
-    return { text: 'balanced schedule', cls: '' };
+  // Bottom 10 / middle 10 / top 10 ranking by value descending (higher = tougher).
+  // Pass the lookup map so we can compute rank against all 30 teams.
+  const rankLabel = (value, byTeam) => {
+    if (value == null) return { text: '—', cls: '' };
+    const sorted = Object.values(byTeam).filter(v => v != null).sort((a, b) => b - a);
+    const total = sorted.length;
+    if (total === 0) return { text: '—', cls: '' };
+    // Stable rank: count values strictly greater than this one (handles ties)
+    const rank = sorted.filter(v => v > value).length + 1;
+    const third = Math.floor(total / 3);
+    if (rank <= third)              return { text: `tough · #${rank} of ${total}`,   cls: 'tough' };
+    if (rank > total - third)       return { text: `soft · #${rank} of ${total}`,    cls: 'easy'  };
+    return                                 { text: `balanced · #${rank} of ${total}`, cls: ''      };
   };
 
-  const oppMeta = fmtSched(oppPct);
-  const sosMeta = fmtSched(sos);
+  const oppMeta = rankLabel(oppPct, oppPctByTeam);
+  const sosMeta = rankLabel(sos, sosByTeam);
 
   // Pyth vs actual delta — green if Pyth higher (record undersells), red if lower
   let pythSub = 'based on run differential';
@@ -3300,8 +3330,8 @@ async function loadRecordContext() {
   }
 
   const pythInfo = "Pythagorean W%. The record a team 'should' have based on runs scored vs. runs allowed (Bill James's formula). If higher than actual, the team is getting unlucky and may be undervalued; lower means it's overperforming its run differential.";
-  const oppInfo  = "Average winning percentage of the teams this team has actually faced in completed games. Below .500 means a soft schedule (wins may be inflated); above means a tough one (record may understate the team).";
-  const sosInfo  = "Rest-of-Schedule Strength of Schedule — average winning percentage of the opponents this team still has to play. Forward-looking, from FanGraphs.";
+  const oppInfo  = "Average winning percentage of the teams this team has actually faced. Ranked across all 30 MLB teams — the 10 teams with the toughest opponents so far are flagged 'tough', the 10 easiest 'soft', the middle 10 'balanced'.";
+  const sosInfo  = "Rest-of-Schedule Strength of Schedule — average winning percentage of opponents this team still has to play (forward-looking, from FanGraphs). Ranked across all 30 teams: top 10 toughest = 'tough', bottom 10 = 'soft'.";
 
   el.innerHTML = `
     <div class="context-grid">
