@@ -304,38 +304,38 @@ function clamp01(v) { if (v == null) return null; const n = Number(v); return is
 
 // ---------- SeatGeek Tickets ----------
 
-// SeatGeek MLB performer slug ↔ MLB team id
+// SeatGeek MLB performer slug ↔ MLB team id (slugs verified live 2026-05-13)
 export const SEATGEEK_SLUG_BY_TEAM = {
-  108: 'mlb-los-angeles-angels',
-  109: 'mlb-arizona-diamondbacks',
-  110: 'mlb-baltimore-orioles',
-  111: 'mlb-boston-red-sox',
-  112: 'mlb-chicago-cubs',
-  113: 'mlb-cincinnati-reds',
-  114: 'mlb-cleveland-guardians',
-  115: 'mlb-colorado-rockies',
-  116: 'mlb-detroit-tigers',
-  117: 'mlb-houston-astros',
-  118: 'mlb-kansas-city-royals',
-  119: 'mlb-los-angeles-dodgers',
-  120: 'mlb-washington-nationals',
-  121: 'mlb-new-york-mets',
-  133: 'mlb-athletics',
-  134: 'mlb-pittsburgh-pirates',
-  135: 'mlb-san-diego-padres',
-  136: 'mlb-seattle-mariners',
-  137: 'mlb-san-francisco-giants',
-  138: 'mlb-st-louis-cardinals',
-  139: 'mlb-tampa-bay-rays',
-  140: 'mlb-texas-rangers',
-  141: 'mlb-toronto-blue-jays',
-  142: 'mlb-minnesota-twins',
-  143: 'mlb-philadelphia-phillies',
-  144: 'mlb-atlanta-braves',
-  145: 'mlb-chicago-white-sox',
-  146: 'mlb-miami-marlins',
-  147: 'mlb-new-york-yankees',
-  158: 'mlb-milwaukee-brewers',
+  108: 'los-angeles-angels',
+  109: 'arizona-diamondbacks',
+  110: 'baltimore-orioles',
+  111: 'boston-red-sox',
+  112: 'chicago-cubs',
+  113: 'cincinnati-reds',
+  114: 'cleveland-guardians',
+  115: 'colorado-rockies',
+  116: 'detroit-tigers',
+  117: 'houston-astros',
+  118: 'kansas-city-royals',
+  119: 'los-angeles-dodgers',
+  120: 'washington-nationals',
+  121: 'new-york-mets',
+  133: 'athletics',
+  134: 'pittsburgh-pirates',
+  135: 'san-diego-padres',
+  136: 'seattle-mariners',
+  137: 'san-francisco-giants',
+  138: 'st-louis-cardinals',
+  139: 'tampa-bay-rays',
+  140: 'texas-rangers',
+  141: 'toronto-blue-jays',
+  142: 'minnesota-twins',
+  143: 'philadelphia-phillies',
+  144: 'atlanta-braves',
+  145: 'chicago-white-sox',
+  146: 'miami-marlins',
+  147: 'new-york-yankees',
+  158: 'milwaukee-brewers',
 };
 
 const TEAM_BY_SEATGEEK_SLUG = Object.fromEntries(
@@ -345,11 +345,13 @@ const TEAM_BY_SEATGEEK_SLUG = Object.fromEntries(
 const SEATGEEK_BASE = 'https://api.seatgeek.com/2/events';
 
 async function fetchSeatGeekEventsForTeam(slug, clientId, fromDate) {
-  const url = `${SEATGEEK_BASE}?performers.slug=${slug}&client_id=${clientId}&datetime_local.gte=${fromDate}&per_page=100&type=mlb`;
+  // Note: do NOT add &type=mlb here — combining type with performers.slug returns 0 results
+  // (SeatGeek treats them as conflicting filters). We filter on event.type client-side.
+  const url = `${SEATGEEK_BASE}?performers.slug=${slug}&client_id=${clientId}&datetime_local.gte=${fromDate}&per_page=100`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`SeatGeek ${res.status} for ${slug}`);
   const data = await res.json();
-  return data.events || [];
+  return (data.events || []).filter(e => e.type === 'mlb');
 }
 
 export async function fetchAndStoreSeatGeekEvents(clientId, supaUrl, supaKey) {
