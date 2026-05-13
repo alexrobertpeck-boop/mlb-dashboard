@@ -435,6 +435,86 @@
     color: #999;
     font-size: 0.9em;
   }
+
+  /* ─── User profile (friend view) ─── */
+  .user-profile-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    background: #fafafa;
+    border: 1px solid #ececec;
+    border-radius: 10px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .user-profile-avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--team-primary, #002D72);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .user-profile-info { flex: 1; min-width: 0; }
+  .user-profile-name { font-weight: 700; font-size: 1.3em; line-height: 1.1; }
+  .user-profile-handle { color: #888; font-size: 0.9em; margin-top: 2px; }
+  .user-profile-follow {
+    padding: 8px 18px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    background: #fff;
+    color: #333;
+    font-size: 0.9em;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .user-profile-follow.follow {
+    background: #002D72;
+    border-color: #002D72;
+    color: white;
+  }
+  .user-profile-follow:disabled { opacity: 0.5; cursor: default; }
+
+  .user-locked {
+    padding: 32px 24px;
+    text-align: center;
+    background: #fafafa;
+    border: 1px dashed #ddd;
+    border-radius: 10px;
+    color: #555;
+  }
+  .user-locked h3 { margin: 0 0 8px; font-size: 1.1em; }
+  .user-locked p { margin: 0; color: #777; font-size: 0.9em; }
+
+  .user-summary-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; margin-bottom: 28px; }
+  .user-summary-card {
+    background: #fafafa;
+    border: 1px solid #ececec;
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .user-summary-label {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 700;
+    color: #777;
+    margin-bottom: 6px;
+  }
+  .user-summary-value {
+    font-size: 1.65em;
+    font-weight: 800;
+    color: #002D72;
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+  .user-summary-value .denom { color: #aaa; font-size: 0.6em; font-weight: 600; }
   .pitcher {
     font-size: 0.68em;
     color: #555;
@@ -1531,19 +1611,28 @@
   /* View-based show/hide */
   main[data-view="landing"]    #team-view,
   main[data-view="landing"]    #attendance-view,
-  main[data-view="landing"]    #friends-view { display: none; }
+  main[data-view="landing"]    #friends-view,
+  main[data-view="landing"]    #user-view { display: none; }
   main[data-view="team"]       #landing-view,
   main[data-view="team"]       #attendance-view,
-  main[data-view="team"]       #friends-view { display: none; }
+  main[data-view="team"]       #friends-view,
+  main[data-view="team"]       #user-view { display: none; }
   main[data-view="attendance"] #team-view,
   main[data-view="attendance"] #landing-view,
-  main[data-view="attendance"] #friends-view { display: none; }
+  main[data-view="attendance"] #friends-view,
+  main[data-view="attendance"] #user-view { display: none; }
   main[data-view="friends"]    #team-view,
   main[data-view="friends"]    #landing-view,
-  main[data-view="friends"]    #attendance-view { display: none; }
+  main[data-view="friends"]    #attendance-view,
+  main[data-view="friends"]    #user-view { display: none; }
+  main[data-view="user"]       #team-view,
+  main[data-view="user"]       #landing-view,
+  main[data-view="user"]       #attendance-view,
+  main[data-view="user"]       #friends-view { display: none; }
   /* Override the HTML `hidden` attribute when this view is active */
   main[data-view="attendance"] #attendance-view { display: block; }
   main[data-view="friends"]    #friends-view { display: block; }
+  main[data-view="user"]       #user-view { display: block; }
 
   main[data-view="landing"] .header-logo,
   main[data-view="landing"] .header-record,
@@ -1553,14 +1642,19 @@
   main[data-view="attendance"] .header-chevron,
   main[data-view="friends"] .header-logo,
   main[data-view="friends"] .header-record,
-  main[data-view="friends"] .header-chevron { display: none; }
+  main[data-view="friends"] .header-chevron,
+  main[data-view="user"] .header-logo,
+  main[data-view="user"] .header-record,
+  main[data-view="user"] .header-chevron { display: none; }
 
   main[data-view="landing"] .header-brand,
   main[data-view="attendance"] .header-brand,
-  main[data-view="friends"] .header-brand { cursor: default; }
+  main[data-view="friends"] .header-brand,
+  main[data-view="user"] .header-brand { cursor: default; }
   main[data-view="landing"] .header-brand:hover,
   main[data-view="attendance"] .header-brand:hover,
-  main[data-view="friends"] .header-brand:hover { background: transparent; }
+  main[data-view="friends"] .header-brand:hover,
+  main[data-view="user"] .header-brand:hover { background: transparent; }
 
   /* ─── Attendance view ─── */
   .attendance-header-row {
@@ -2199,6 +2293,10 @@
       <button class="auth-submit games-add-btn" id="add-game-btn">+ Log a Game</button>
       <div class="games-list" id="games-list"></div>
     </section>
+  </div>
+
+  <div id="user-view" hidden>
+    <div id="user-profile-content" class="loading">Loading…</div>
   </div>
 
   <div id="friends-view" hidden>
@@ -4366,11 +4464,14 @@ function evaluateStadiumSet(ctx, requiredIds) {
   return { earned: false, current, target };
 }
 
-function renderPennants() {
-  const el = document.getElementById('pennants');
+function renderPennants(elementId = 'pennants', dataOverride = null) {
+  const el = document.getElementById(elementId);
   if (!el) return;
-  const sortedGames = [...attendedGames].sort((a, b) => a.game_date.localeCompare(b.game_date));
-  const ctx = { sortedGames, visitedStadiums, seenTeams };
+  const games   = dataOverride?.attendedGames   ?? attendedGames;
+  const stads   = dataOverride?.visitedStadiums ?? visitedStadiums;
+  const teams   = dataOverride?.seenTeams       ?? seenTeams;
+  const sortedGames = [...games].sort((a, b) => a.game_date.localeCompare(b.game_date));
+  const ctx = { sortedGames, visitedStadiums: stads, seenTeams: teams };
   el.innerHTML = PENNANTS.map(p => {
     const r = evaluatePennant(p, ctx);
     const earned = r.earned;
@@ -4522,15 +4623,20 @@ async function getGameAppearedPlayers(gamePk) {
   }
 }
 
-function renderBucketList() {
-  const el = document.getElementById('bucket-list');
+function renderBucketList(elementId = 'bucket-list', dataOverride = null) {
+  const el = document.getElementById(elementId);
   if (!el) return;
-  if (bucketList.length === 0) {
-    el.innerHTML = '<div class="bucket-empty">No players on your bucket list yet. Click "+ Add Player" to start.</div>';
+  const list = dataOverride?.bucketList ?? bucketList;
+  const seenMap = dataOverride?.seenPlayers ?? seenPlayers;
+  const readOnly = !!dataOverride; // viewing a friend's list — no remove button
+  if (list.length === 0) {
+    el.innerHTML = readOnly
+      ? '<div class="bucket-empty">No players on this bucket list yet.</div>'
+      : '<div class="bucket-empty">No players on your bucket list yet. Click "+ Add Player" to start.</div>';
     return;
   }
-  el.innerHTML = bucketList.map(p => {
-    const seenInfo = seenPlayers.get(p.player_id);
+  el.innerHTML = list.map(p => {
+    const seenInfo = seenMap.get ? seenMap.get(p.player_id) : seenMap[p.player_id];
     const seen = !!seenInfo;
     const team = TEAMS[p.team_id];
     const teamLogo = p.team_id
@@ -4544,8 +4650,9 @@ function renderBucketList() {
         : '';
       seenBadge = `<div class="bucket-card-seen-badge">✓ Seen${dateStr ? `<br>${dateStr}` : ''}</div>`;
     }
+    const removeBtn = readOnly ? '' : `<button class="bucket-card-remove" data-player-id="${p.player_id}" aria-label="Remove">×</button>`;
     return `<div class="bucket-card ${seen ? 'seen' : 'unseen'}" data-player-id="${p.player_id}">
-      <button class="bucket-card-remove" data-player-id="${p.player_id}" aria-label="Remove">×</button>
+      ${removeBtn}
       <img class="bucket-card-photo" src="${playerPhotoUrl(p.player_id)}" alt="${escapeHtml(p.name)}" onerror="this.style.visibility='hidden'">
       <div class="bucket-card-info">
         <div class="bucket-card-name">${escapeHtml(p.name)}</div>
@@ -4554,12 +4661,14 @@ function renderBucketList() {
       </div>
     </div>`;
   }).join('');
-  el.querySelectorAll('.bucket-card-remove').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      onRemoveBucketPlayer(parseInt(btn.dataset.playerId, 10));
+  if (!readOnly) {
+    el.querySelectorAll('.bucket-card-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onRemoveBucketPlayer(parseInt(btn.dataset.playerId, 10));
+      });
     });
-  });
+  }
 }
 
 async function onRemoveBucketPlayer(playerId) {
@@ -5241,6 +5350,143 @@ function wireFriendsView() {
   document.getElementById('friend-search-input').addEventListener('input', onFriendSearchInput);
 }
 
+/* ─── User profile view ─── */
+
+async function loadUserProfile(username) {
+  const root = document.getElementById('user-profile-content');
+  root.classList.add('loading');
+  root.innerHTML = 'Loading…';
+
+  // Find the profile by username
+  const { data: profile, error: profileErr } = await sb.from('profiles')
+    .select('*').eq('username', username).maybeSingle();
+  if (profileErr || !profile) {
+    root.classList.remove('loading');
+    root.innerHTML = `<div class="user-locked"><h3>Profile not found</h3><p>No user with username "@${escapeHtml(username)}" exists.</p></div>`;
+    return;
+  }
+
+  // Determine viewer's relationship to this profile
+  const { data: { user } } = await sb.auth.getUser();
+  const isOwner = user && user.id === profile.user_id;
+  await loadFollowGraph(); // populates followingSet
+  const isFollowing = user && followingSet.has(profile.user_id);
+  const canSee = isOwner || isFollowing;
+
+  // Header (always visible)
+  const initials = (profile.display_name || profile.username).split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase();
+  const followAction = isOwner ? null : (isFollowing ? 'unfollow' : 'follow');
+  const followBtnHtml = followAction
+    ? `<button class="user-profile-follow ${followAction}" id="user-profile-follow-btn" data-target="${profile.user_id}" data-action="${followAction}">${followAction === 'follow' ? 'Follow' : 'Following'}</button>`
+    : '';
+
+  const headerHtml = `<div class="user-profile-header">
+    <div class="user-profile-avatar">${escapeHtml(initials || '?')}</div>
+    <div class="user-profile-info">
+      <div class="user-profile-name">${escapeHtml(profile.display_name || profile.username)}</div>
+      <div class="user-profile-handle">@${escapeHtml(profile.username)}</div>
+    </div>
+    ${followBtnHtml}
+  </div>`;
+
+  if (!canSee) {
+    root.classList.remove('loading');
+    root.innerHTML = `${headerHtml}
+      <div class="user-locked">
+        <h3>Follow to see their collection</h3>
+        <p>Once you follow ${escapeHtml(profile.display_name || profile.username)}, you'll see their pennants, games, stadiums, and bucket list.</p>
+      </div>`;
+    wireUserProfileFollowBtn(username);
+    return;
+  }
+
+  // Fetch all of their data (RLS will allow it since we're owner or follower)
+  const friendId = profile.user_id;
+  const [gamesRes, stadiumsRes, teamsRes, bucketRes, seenRes] = await Promise.all([
+    sb.from('attended_games').select('*').eq('user_id', friendId),
+    sb.from('attended_stadiums').select('team_id').eq('user_id', friendId),
+    sb.from('seen_teams').select('team_id').eq('user_id', friendId),
+    sb.from('bucket_list_players').select('*').eq('user_id', friendId).order('added_at', { ascending: false }),
+    sb.from('seen_players').select('*').eq('user_id', friendId),
+  ]);
+
+  const friendGames = gamesRes.data || [];
+  const friendStadiums = new Set((stadiumsRes.data || []).map(r => r.team_id));
+  const friendTeams = new Set((teamsRes.data || []).map(r => r.team_id));
+  const friendBucket = bucketRes.data || [];
+  const friendSeenPlayers = new Map((seenRes.data || []).map(r => [r.player_id, r]));
+
+  // Derived sets — stadiums + teams seen include game-derived
+  const derivedStadiums = new Set(friendStadiums);
+  const derivedTeamsAll = new Set(friendTeams);
+  for (const g of friendGames) {
+    derivedStadiums.add(g.home_team_id);
+    derivedTeamsAll.add(g.home_team_id);
+    derivedTeamsAll.add(g.away_team_id);
+  }
+
+  root.classList.remove('loading');
+  root.innerHTML = `${headerHtml}
+    <div class="user-summary-row">
+      <div class="user-summary-card">
+        <div class="user-summary-label">Stadiums Visited</div>
+        <div class="user-summary-value">${derivedStadiums.size}<span class="denom"> / 30</span></div>
+      </div>
+      <div class="user-summary-card">
+        <div class="user-summary-label">Teams Seen</div>
+        <div class="user-summary-value">${derivedTeamsAll.size}<span class="denom"> / 30</span></div>
+      </div>
+      <div class="user-summary-card">
+        <div class="user-summary-label">Games Logged</div>
+        <div class="user-summary-value">${friendGames.length}</div>
+      </div>
+    </div>
+
+    <section>
+      <h2>Pennants</h2>
+      <div class="pennants-grid" id="user-pennants"></div>
+    </section>
+
+    <section>
+      <h2>Player Bucket List</h2>
+      <div class="bucket-list" id="user-bucket-list"></div>
+    </section>`;
+
+  wireUserProfileFollowBtn(username);
+
+  // Reuse the existing renderers with the friend's data
+  renderPennants('user-pennants', {
+    attendedGames: friendGames,
+    visitedStadiums: friendStadiums,
+    seenTeams: friendTeams,
+  });
+  renderBucketList('user-bucket-list', {
+    bucketList: friendBucket,
+    seenPlayers: friendSeenPlayers,
+  });
+}
+
+function wireUserProfileFollowBtn(username) {
+  const btn = document.getElementById('user-profile-follow-btn');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.target;
+    const action = btn.dataset.action;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user || !targetId) return;
+    btn.disabled = true;
+    if (action === 'follow') {
+      const { error } = await sb.from('follows').insert({ follower_id: user.id, followed_id: targetId });
+      if (error) { console.error('Follow failed:', error); btn.disabled = false; return; }
+    } else {
+      const { error } = await sb.from('follows').delete().eq('follower_id', user.id).eq('followed_id', targetId);
+      if (error) { console.error('Unfollow failed:', error); btn.disabled = false; return; }
+    }
+    // Reload the whole profile — full data now visible (or hidden again)
+    loadUserProfile(username);
+  });
+}
+
 function renderAuthArea(user) {
   const el = document.getElementById('auth-area');
   if (user) {
@@ -5486,10 +5732,13 @@ async function init() {
   const teamFromUrl = parseInt(params.get('team'), 10);
   const viewFromUrl = params.get('view');
 
+  const userFromUrl = params.get('user');
+
   let view;
   if (user && viewFromUrl === 'attendance') view = 'attendance';
   else if (user && viewFromUrl === 'friends') view = 'friends';
-  else if (TEAMS[teamFromUrl])               view = 'team';
+  else if (userFromUrl)                       view = 'user';
+  else if (TEAMS[teamFromUrl])                view = 'team';
   else if (user)                              view = 'landing';
   else                                        view = 'team';
 
@@ -5519,6 +5768,13 @@ async function init() {
     document.getElementById('header-team-name').textContent = 'Friends';
     wireFriendsView();
     await loadFriendsView();
+    return;
+  }
+
+  if (view === 'user') {
+    document.title = `162-0 · @${userFromUrl}`;
+    document.getElementById('header-team-name').textContent = `@${userFromUrl}`;
+    await loadUserProfile(userFromUrl);
     return;
   }
 
