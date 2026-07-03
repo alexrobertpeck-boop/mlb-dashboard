@@ -1315,6 +1315,7 @@
     align-items: center;
     gap: 12px;
     min-width: 0;
+    position: relative;
     transition: border-color 0.15s ease, transform 0.1s ease;
   }
   .stat-card:hover {
@@ -1355,6 +1356,37 @@
   }
   .stat-card.empty .stat-value { color: #aaa; }
   .stat-card.empty .stat-player { color: #999; font-style: italic; }
+
+  /* Quick-add to bucket list — shown on stat cards for logged-in users */
+  .bucket-quick-add {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid #ddd;
+    background: #fff;
+    color: #888;
+    font-size: 0.9em;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.12s ease, background 0.12s ease;
+  }
+  .stat-card:hover .bucket-quick-add { opacity: 1; }
+  .bucket-quick-add:hover { background: var(--team-accent); color: #fff; border-color: var(--team-accent); }
+  .bucket-quick-add.added {
+    opacity: 1;
+    background: #f1f8e9;
+    border-color: #c8e6c9;
+    color: #2e7d32;
+    cursor: default;
+  }
+  @media (hover: none) {
+    .bucket-quick-add { opacity: 1; } /* touch devices have no hover — always show */
+  }
 
   .loading { color: #888; font-style: italic; }
   .error { color: #b3261e; padding: 12px; background: #fef2f2; border-radius: 6px; }
@@ -1414,6 +1446,16 @@
     width: 100%;
     max-width: 400px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  /* Notifications modal can grow long — cap it and scroll the list */
+  #notifications-modal .auth-modal-content {
+    display: flex;
+    flex-direction: column;
+    max-height: min(640px, 85vh);
+  }
+  #notifications-list {
+    overflow-y: auto;
+    min-height: 0;
   }
   .auth-modal-close {
     position: absolute;
@@ -2497,10 +2539,6 @@
       </div>
     </section>
 
-    <section id="friend-matchups-section">
-      <h2>Friend Matchups</h2>
-      <div id="friend-matchups" class="loading">Loading…</div>
-    </section>
   </div>
 
   <div id="attendance-view" hidden>
@@ -2567,6 +2605,12 @@
       <h2>Followers <span class="follow-count" id="followers-count"></span></h2>
       <div id="followers-list" class="loading">Loading…</div>
     </section>
+
+    <section id="friend-matchups-section">
+      <h2>Friend Matchups</h2>
+      <p class="attendance-hint">Upcoming games where your main team plays a friend's main team.</p>
+      <div id="friend-matchups" class="loading">Loading…</div>
+    </section>
   </div>
 
   <div id="team-view">
@@ -2598,8 +2642,12 @@
   </section>
 
   <section>
-    <h2>Latest News</h2>
-    <div id="news" class="loading">Loading…</div>
+    <details class="collapsible">
+      <summary>
+        <h2>Latest News</h2>
+      </summary>
+      <div id="news" class="loading">Loading…</div>
+    </details>
   </section>
 
   <section id="injury-section">
@@ -3458,6 +3506,19 @@ function playerPhotoUrl(playerId) {
   return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_120,h_120,c_thumb,g_face,q_auto:best/v1/people/${playerId}/headshot/67/current`;
 }
 
+// Small "+" on stat cards that adds the player straight to the bucket list.
+// Only rendered for logged-in users; wired via one delegated listener.
+function bucketQuickAddHtml(leader) {
+  if (!document.body.classList.contains('logged-in')) return '';
+  const added = bucketList.some(p => p.player_id === leader.player.id);
+  return `<button class="bucket-quick-add${added ? ' added' : ''}"
+    data-player-id="${leader.player.id}"
+    data-name="${escapeHtml(leader.player.fullName)}"
+    data-team-id="${leader.team?.id || ''}"
+    title="${added ? 'On your bucket list' : 'Add to bucket list'}"
+    aria-label="Add ${escapeHtml(leader.player.fullName)} to bucket list">${added ? '✓' : '+'}</button>`;
+}
+
 function infoIconHtml(info) {
   if (!info) return '';
   const safe = info.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -3482,6 +3543,7 @@ function renderStatCard(cat, leader, opts = {}) {
   const playerLine = teamShort ? `${leader.player.fullName}, ${teamShort}` : leader.player.fullName;
   return `<div class="stat-card">
     <img class="player-photo" src="${photo}" alt="${leader.player.fullName}" onerror="this.style.visibility='hidden'">
+    ${bucketQuickAddHtml(leader)}
     <div class="stat-card-body">
       <div class="stat-name">${nameHtml}</div>
       <div class="stat-value">${value}</div>
@@ -4387,7 +4449,6 @@ async function loadMlbPulse() {
 async function loadLanding() {
   // Around-MLB sections always load — independent of saved teams
   loadMlbPulse().catch(showError('mlb-pulse'));
-  loadFriendMatchups().catch(showError('friend-matchups'));
   loadMlbOverview().catch(showError('mlb-overview'));
   loadLeagueHitting().catch(showError('league-hitting'));
   loadLeaguePitching().catch(showError('league-pitching'));
@@ -4963,8 +5024,13 @@ function onPlayerSearchInput() {
   playerSearchDebounce = setTimeout(runPlayerSearch, 150);
 }
 
+// Strip diacritics so "Acuna" matches "Acuña", "Jose" matches "José", etc.
+function foldAccents(s) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 async function runPlayerSearch() {
-  const q = document.getElementById('player-search-input').value.trim().toLowerCase();
+  const q = foldAccents(document.getElementById('player-search-input').value.trim().toLowerCase());
   const resultsEl = document.getElementById('player-search-results');
   if (q.length < 2) { resultsEl.innerHTML = ''; return; }
   resultsEl.innerHTML = '<div class="player-search-empty">Searching…</div>';
@@ -4972,7 +5038,7 @@ async function runPlayerSearch() {
   try { players = await getPlayerList(); }
   catch (e) { resultsEl.innerHTML = '<div class="player-search-empty">Couldn\'t load player list.</div>'; return; }
   const matches = players
-    .filter(p => p.name.toLowerCase().includes(q))
+    .filter(p => foldAccents(p.name.toLowerCase()).includes(q))
     .slice(0, 12);
   if (!matches.length) {
     resultsEl.innerHTML = '<div class="player-search-empty">No active players found.</div>';
@@ -5002,9 +5068,10 @@ async function runPlayerSearch() {
   });
 }
 
-async function onAddBucketPlayer(player) {
+// Core add — shared by the tracker's search modal and the stat-card quick-add.
+async function addPlayerToBucket(player) {
   const { data: { user } } = await sb.auth.getUser();
-  if (!user) return;
+  if (!user) return false;
   const row = {
     user_id: user.id,
     player_id: player.id,
@@ -5013,16 +5080,65 @@ async function onAddBucketPlayer(player) {
     team_id: player.teamId || null,
   };
   const { error } = await sb.from('bucket_list_players').insert(row);
-  if (error) { console.error('Add failed:', error); return; }
+  if (error) {
+    if (error.code === '23505') return true; // already on the list — treat as success
+    console.error('Add failed:', error);
+    return false;
+  }
   bucketList = [{ ...row, added_at: new Date().toISOString() }, ...bucketList];
-  renderBucketList();
-  closePlayerSearchModal();
   // Background: scan all logged games for this player; render if a hit lands
   scanLoggedGamesForPlayer(player.id);
+  return true;
+}
+
+async function onAddBucketPlayer(player) {
+  const ok = await addPlayerToBucket(player);
+  if (!ok) return;
+  renderBucketList();
+  closePlayerSearchModal();
+}
+
+// Sync every stat-card quick-add button against the current bucket list
+function refreshBucketQuickAddButtons() {
+  const ids = new Set(bucketList.map(p => p.player_id));
+  document.querySelectorAll('.bucket-quick-add').forEach(btn => {
+    const added = ids.has(parseInt(btn.dataset.playerId, 10));
+    btn.classList.toggle('added', added);
+    btn.textContent = added ? '✓' : '+';
+    btn.title = added ? 'On your bucket list' : 'Add to bucket list';
+  });
+}
+
+let bucketQuickAddWired = false;
+function wireBucketQuickAdd() {
+  if (bucketQuickAddWired) return;
+  bucketQuickAddWired = true;
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.bucket-quick-add');
+    if (!btn || btn.classList.contains('added') || btn.disabled) return;
+    btn.disabled = true;
+    const ok = await addPlayerToBucket({
+      id: parseInt(btn.dataset.playerId, 10),
+      name: btn.dataset.name,
+      position: null,
+      teamId: btn.dataset.teamId ? parseInt(btn.dataset.teamId, 10) : null,
+    });
+    btn.disabled = false;
+    if (ok) refreshBucketQuickAddButtons();
+  });
 }
 
 async function scanLoggedGamesForPlayer(playerId) {
   if (seenPlayers.has(playerId)) return;
+  // Quick-add can happen on team pages / Home Plate where the tracker data was
+  // never loaded — pull the user's games on demand so the scan still works.
+  if (!attendedGames.length) {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+    const { data } = await sb.from('attended_games').select('*').eq('user_id', user.id);
+    attendedGames = data || [];
+    if (!attendedGames.length) return;
+  }
   // Earliest first → record true first sighting
   const games = attendedGames
     .filter(g => g.game_pk)
@@ -5962,9 +6078,11 @@ async function loadFriendMatchups() {
   const profileById = {};
   for (const p of (profilesRes.data || [])) profileById[p.user_id] = p;
 
-  // Build map: team_id → friends who follow that team
+  // Build map: team_id → friends whose MAIN team it is. Rival/interested
+  // follows don't count — a matchup is your main team vs their main team.
   const friendsByTeam = {};
   for (const row of (friendTeamsRes.data || [])) {
+    if (row.role !== 'main') continue;
     const profile = profileById[row.user_id];
     if (!profile) continue;
     if (!friendsByTeam[row.team_id]) friendsByTeam[row.team_id] = [];
@@ -5989,32 +6107,26 @@ async function loadFriendMatchups() {
   }
 
   if (matchups.length === 0) {
-    el.innerHTML = '<div class="empty-note">No matchups in the next two weeks where your friends follow ' + escapeHtml(mainTeam?.short || 'main team') + '\'s opponent.</div>';
+    el.innerHTML = '<div class="empty-note">No games in the next two weeks between ' + escapeHtml(mainTeam?.short || 'your main team') + ' and your friends\' main teams.</div>';
     return;
   }
 
   // Group matchups by friend (a single game can appear under multiple friends
-  // if more than one follows the opposing team)
-  const byFriend = new Map(); // friend_user_id → { profile, role, games[] }
+  // if more than one has the opposing team as their main)
+  const byFriend = new Map(); // friend_user_id → { profile, games[] }
   for (const m of matchups) {
     for (const f of m.friends) {
       if (!byFriend.has(f.user_id)) {
-        byFriend.set(f.user_id, { profile: f, role: f.role, games: [] });
+        byFriend.set(f.user_id, { profile: f, games: [] });
       }
-      // Keep the strongest role per friend (main > rival > interested)
-      const entry = byFriend.get(f.user_id);
-      const order = { main: 0, rival: 1, interested: 2 };
-      if ((order[f.role] ?? 2) < (order[entry.role] ?? 2)) entry.role = f.role;
-      entry.games.push(m);
+      byFriend.get(f.user_id).games.push(m);
     }
   }
 
   const myName = escapeHtml(mainTeam?.short || 'You');
   el.innerHTML = [...byFriend.values()].map(entry => {
-    const { profile, role, games } = entry;
-    const roleTag = role === 'main' ? '<span class="matchup-tag main">main</span>'
-                  : role === 'rival' ? '<span class="matchup-tag rival">rival</span>'
-                  : '<span class="matchup-tag">follows</span>';
+    const { profile, games } = entry;
+    const roleTag = '<span class="matchup-tag main">main</span>';
     const friendLink = `<a href="/?user=${encodeURIComponent(profile.username)}">${escapeHtml(profile.display_name || profile.username)}</a>`;
 
     const gamesHtml = games.map(g => {
@@ -6568,6 +6680,15 @@ async function init() {
     if (view !== 'friends')    document.getElementById('friends-link').hidden = false;
   }
 
+  // Stat-card quick-add buttons need the bucket list to know their state.
+  // Load it in the background on the views that render stat cards; the
+  // attendance view loads the full list itself.
+  if (user && (view === 'landing' || view === 'team')) {
+    wireBucketQuickAdd();
+    sb.from('bucket_list_players').select('*').eq('user_id', user.id)
+      .then(({ data }) => { if (data) { bucketList = data; refreshBucketQuickAddButtons(); } });
+  }
+
   if (view === 'attendance') {
     document.title = '162-0 · My Tracker';
     document.getElementById('header-team-name').textContent = 'My Tracker';
@@ -6580,6 +6701,7 @@ async function init() {
     document.title = '162-0 · Friends';
     document.getElementById('header-team-name').textContent = 'Friends';
     wireFriendsView();
+    loadFriendMatchups().catch(showError('friend-matchups'));
     await loadFriendsView();
     return;
   }
