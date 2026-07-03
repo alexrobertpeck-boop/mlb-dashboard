@@ -43,6 +43,16 @@ export function getEnv(name) {
   return (typeof Netlify !== 'undefined' && Netlify.env?.get(name)) || process.env[name];
 }
 
+// Gate for the manually-triggerable endpoints (pulse-cron, backfill-odds).
+// They do expensive work — Claude calls, bulk fetches, service-role writes —
+// so browser triggers must carry ?token=<CRON_TRIGGER_TOKEN>. If the env var
+// isn't configured yet we stay open, so nothing breaks before it's set.
+export function isAuthorizedManualTrigger(req) {
+  const secret = getEnv('CRON_TRIGGER_TOKEN');
+  if (!secret) return true;
+  return new URL(req.url).searchParams.get('token') === secret;
+}
+
 // ---------- Team Pulse ----------
 
 export async function gatherTeamContext(teamId) {

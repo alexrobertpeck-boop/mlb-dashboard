@@ -13,6 +13,7 @@ import {
   callClaude, supabaseUpsert, getEnv,
   fetchAndStorePlayoffOdds,
   fetchAndStoreSeatGeekEvents,
+  isAuthorizedManualTrigger,
 } from '../lib/pulse-shared.mjs';
 
 export const config = {
@@ -20,6 +21,16 @@ export const config = {
 };
 
 export default async (req) => {
+  // Netlify's scheduler invokes this as a POST with a { next_run } JSON body.
+  // Anything else is a manual trigger and must carry the token — one anonymous
+  // hit costs ~31 Claude calls plus FanGraphs/SeatGeek fetches.
+  let scheduled = false;
+  if (req.method === 'POST') {
+    try { scheduled = !!(await req.clone().json())?.next_run; } catch {}
+  }
+  if (!scheduled && !isAuthorizedManualTrigger(req)) {
+    return Response.json({ error: 'Unauthorized — pass ?token=' }, { status: 401 });
+  }
   // ?debug=seatgeek returns the raw SeatGeek response for one team, no writes.
   // Used to inspect the response shape when the normal cron writes 0 events.
   try {

@@ -53,6 +53,7 @@ Source-of-truth model: **logged games are canonical**. Stadiums/teams shown as v
 - `SUPABASE_URL` — project URL, plain `https://xxx.supabase.co` (no trailing slash, no `/rest/v1`)
 - `SUPABASE_SERVICE_ROLE_KEY` — bypasses RLS, **must be marked secret**
 - `SEATGEEK_CLIENT_ID` — SeatGeek API client ID for ticket-link snapshots. If unset, the SeatGeek leg of `pulse-cron` is skipped (logged in the response, not a fatal error).
+- `CRON_TRIGGER_TOKEN` — shared secret gating manual browser triggers of `pulse-cron` and `backfill-odds` (`?token=...`). Scheduled runs pass automatically (Netlify's scheduler POSTs a `{ next_run }` body). If unset, the endpoints stay open — set it to stop strangers burning Claude/FanGraphs/SeatGeek quota.
 
 The frontend uses its own (public) anon key inline in `index.html`. Service role is server-side only.
 
@@ -96,10 +97,10 @@ Shipped across six commits (Friends 1-6). The feature set:
 |---|---|
 | Add a new pennant | Add object to `PENNANTS` array in `index.html`; add a `target.type` branch in `evaluatePennant` if it's a new shape |
 | Add a new Supabase table | Provide Alex the SQL (with RLS), have him paste into Supabase SQL Editor before pushing code that reads from it |
-| Refresh pulses + ticket links immediately | Hit `/.netlify/functions/pulse-cron` in browser |
-| Backfill odds from a date | Hit `/.netlify/functions/backfill-odds?start=YYYY-MM-DD` |
-| Inspect a FanGraphs response | `/.netlify/functions/backfill-odds?debug=N` (N = days ago) |
-| Inspect a SeatGeek response | `/.netlify/functions/pulse-cron?debug=seatgeek` |
+| Refresh pulses + ticket links immediately | Hit `/.netlify/functions/pulse-cron?token=<CRON_TRIGGER_TOKEN>` in browser |
+| Backfill odds from a date | Hit `/.netlify/functions/backfill-odds?start=YYYY-MM-DD&token=<CRON_TRIGGER_TOKEN>` |
+| Inspect a FanGraphs response | `/.netlify/functions/backfill-odds?debug=N&token=...` (N = days ago) |
+| Inspect a SeatGeek response | `/.netlify/functions/pulse-cron?debug=seatgeek&token=...` |
 
 ## On the backlog (not started)
 

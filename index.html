@@ -3553,7 +3553,12 @@ function renderStatCard(cat, leader, opts = {}) {
 }
 
 // Mobile: tap to toggle the tooltip; tap outside to close.
+// Guarded: called from both init() and loadRecordContext() — a second
+// document-level listener would instantly toggle the tooltip back off.
+let infoIconsWired = false;
 function wireInfoIcons() {
+  if (infoIconsWired) return;
+  infoIconsWired = true;
   document.addEventListener('click', (e) => {
     const icon = e.target.closest('.info-icon');
     document.querySelectorAll('.info-icon.show-tip').forEach(el => {
@@ -3717,12 +3722,16 @@ function renderNewsItem(item) {
   const date = item.date
     ? item.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
     : '';
-  return `<a class="news-item" href="${item.url}" target="_blank" rel="noopener">
-    ${item.thumb ? `<img class="news-thumb" src="${item.thumb}" alt="" onerror="this.style.visibility='hidden'">` : ''}
+  // Headlines/summaries/URLs come from external feeds (MLB CMS, ESPN) — escape
+  // everything, and only link/embed genuine https URLs.
+  const url = /^https:\/\//i.test(item.url || '') ? item.url : '';
+  const thumb = /^https:\/\//i.test(item.thumb || '') ? item.thumb : '';
+  return `<a class="news-item" href="${escapeHtml(url)}" target="_blank" rel="noopener">
+    ${thumb ? `<img class="news-thumb" src="${escapeHtml(thumb)}" alt="" onerror="this.style.visibility='hidden'">` : ''}
     <div class="news-body">
-      <div class="news-headline">${item.headline}</div>
-      <div class="news-summary">${item.summary}</div>
-      <div class="news-meta"><span class="news-source">${item.source}</span>${date ? '· ' + date : ''}</div>
+      <div class="news-headline">${escapeHtml(item.headline || '')}</div>
+      <div class="news-summary">${escapeHtml(item.summary || '')}</div>
+      <div class="news-meta"><span class="news-source">${escapeHtml(item.source || '')}</span>${date ? '· ' + date : ''}</div>
     </div>
   </a>`;
 }
@@ -4467,7 +4476,7 @@ async function loadLanding() {
     const data = await fetchLandingData(savedTeams);
     grid.innerHTML = savedTeams.map(id => renderLandingCard(data[id])).join('');
   } catch (err) {
-    grid.innerHTML = `<div class="error">Couldn't load: ${err.message}</div>`;
+    grid.innerHTML = `<div class="error">Couldn't load: ${escapeHtml(err.message || 'unknown error')}</div>`;
     console.error(err);
   }
 }
@@ -5463,15 +5472,22 @@ async function handleSaveGame(e) {
   setGameMessage('Saved!', 'info');
   setTimeout(async () => {
     closeAddGameModal();
-    const { data } = await sb.from('attended_games').select('*').eq('user_id', user.id).order('game_date', { ascending: false });
-    attendedGames = data || [];
-    renderGamesList();
-    renderAttendanceStats();
-    renderTeamsSeen();
-    renderPennants();
-    // Refresh the home stadium's marker — it's now game-derived
-    stadiumMarkers[homeTeamId]?.setIcon(createStadiumIcon(homeTeamId, true));
-    stadiumMarkers[homeTeamId]?.setTooltipContent(stadiumTooltipHtml(homeTeamId));
+    try {
+      const { data, error } = await sb.from('attended_games').select('*').eq('user_id', user.id).order('game_date', { ascending: false });
+      // On a failed refetch keep the current list — the game IS saved, and
+      // replacing attendedGames with [] would visually wipe the whole tracker.
+      if (error || !data) throw error || new Error('empty refetch');
+      attendedGames = data;
+      renderGamesList();
+      renderAttendanceStats();
+      renderTeamsSeen();
+      renderPennants();
+      // Refresh the home stadium's marker — it's now game-derived
+      stadiumMarkers[homeTeamId]?.setIcon(createStadiumIcon(homeTeamId, true));
+      stadiumMarkers[homeTeamId]?.setTooltipContent(stadiumTooltipHtml(homeTeamId));
+    } catch (e) {
+      console.error('Post-save refresh failed (game saved fine):', e);
+    }
   }, 600);
 }
 
@@ -5504,7 +5520,7 @@ function showError(id) {
     const el = document.getElementById(id);
     if (el) {
       el.classList.remove('loading');
-      el.innerHTML = `<div class="error">Couldn't load: ${err.message}</div>`;
+      el.innerHTML = `<div class="error">Couldn't load: ${escapeHtml(err.message || 'unknown error')}</div>`;
     }
     console.error(err);
   };
@@ -5703,7 +5719,11 @@ function onFriendSearchInput() {
 }
 
 async function runFriendSearch() {
-  const q = document.getElementById('friend-search-input').value.trim().toLowerCase();
+  // Whitelist chars before this goes into the .or() filter string below —
+  // commas/dots/parens are PostgREST filter syntax and % _ are LIKE wildcards,
+  // so raw input could alter the query itself.
+  const q = document.getElementById('friend-search-input').value.trim().toLowerCase()
+    .replace(/[^a-z0-9 _-]/g, '');
   const el = document.getElementById('friend-search-results');
   if (q.length < 2) { el.innerHTML = ''; return; }
   const { data: { user } } = await sb.auth.getUser();

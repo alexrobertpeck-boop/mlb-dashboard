@@ -6,12 +6,18 @@
 
 import {
   fetchFanGraphsOdds, fanGraphsRowToDbRow,
-  supabaseUpsert, getEnv,
+  supabaseUpsert, getEnv, isAuthorizedManualTrigger,
 } from '../lib/pulse-shared.mjs';
 
 const BATCH_SIZE = 5; // 5 concurrent FanGraphs fetches at a time — polite-ish
 
 export default async (req) => {
+  // Manual-only tool: can rewrite the whole playoff_odds history and fire
+  // hundreds of FanGraphs fetches, so it always requires the token.
+  if (!isAuthorizedManualTrigger(req)) {
+    return Response.json({ error: 'Unauthorized — pass ?token=' }, { status: 401 });
+  }
+
   const url = new URL(req.url);
 
   // Debug mode: ?debug=N tries several URL patterns FanGraphs may support

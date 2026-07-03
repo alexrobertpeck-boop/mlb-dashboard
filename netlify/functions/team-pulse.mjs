@@ -32,7 +32,11 @@ export default async (req) => {
         }
       }
     } catch (e) {
-      console.error('DB read failed; falling back to live generation:', e);
+      // A DB hiccup must NOT open the live-generation path — with the cache
+      // unreachable, every page load would fire its own Claude call. Live
+      // generation is only for genuinely missing/stale rows.
+      console.error('DB read failed:', e);
+      return jsonError(503, 'Summary temporarily unavailable — try again in a minute.');
     }
   }
 
