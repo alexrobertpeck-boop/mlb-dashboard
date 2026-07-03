@@ -104,7 +104,15 @@ Shipped across six commits (Friends 1-6). The feature set:
 
 ## On the backlog (not started)
 
-_(nothing big right now — Friends shipped. Add items here as they come up.)_
+Lower-priority findings from the July 2026 security/quality sweep:
+
+- **Offseason breakage**: several sections use `season = current year`, so in Jan–Feb they request e.g. March→January date ranges and render empty. Use previous year when month < March.
+- **US-date vs local-date mismatch**: "today" is computed from the browser's local date; in Australia that's a day ahead of the MLB slate — hides the nearest game's SeatGeek link and misplaces "today" markers. Derive MLB-dates from `America/New_York`.
+- **Search race conditions**: player + friend search can have a slow earlier response overwrite a later one (needs a request token/bail check).
+- **localStorage never cleaned**: `mlb-players-<season>` and `boxscore-players-<gamePk>` keys accumulate forever.
+- **Consistency escaping**: MLB Stats API strings (player names in injuries/stat cards/calendar/standings) render unescaped in spots — safe unless MLB is compromised, but inconsistent with the rest of the file.
+- **`select('*')` on profiles** in 3 places — would leak any future private column; use explicit column lists.
+- **No fetch timeouts in Netlify functions** — a hung upstream stalls until Netlify's hard timeout.
 
 ## Style of work he likes
 
