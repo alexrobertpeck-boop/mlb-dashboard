@@ -5347,7 +5347,7 @@ async function handleSaveGame(e) {
   setGameMessage('Saved!', 'info');
   setTimeout(async () => {
     closeAddGameModal();
-    const { data } = await sb.from('attended_games').select('*').order('game_date', { ascending: false });
+    const { data } = await sb.from('attended_games').select('*').eq('user_id', user.id).order('game_date', { ascending: false });
     attendedGames = data || [];
     renderGamesList();
     renderAttendanceStats();
