@@ -134,6 +134,8 @@ Focus on three things, in order of importance:
 2. THE NEXT GAME — what to watch for, the matchup, any storyline going in.
 3. ANY GENUINELY RECENT NEWS — only if there's something actually new in the last day or two. Skip if nothing fits.
 
+INJURIES: mention one only if it genuinely changes this team's outlook — a star or everyday regular going down, or a key player returning. Routine IL shuffle, rehab assignments, and day-to-day knocks are not the story. Never lead with an injury when there's a game to talk about.
+
 Don't restate the season record, division standing, or whether they're slumping/streaking — fans already know. Don't pad with generic season-context. Don't invent details that aren't in the data below. If the last game was unremarkable, lean harder into the matchup ahead.
 
 LAST GAME (most recent first; row 1 is the game to recap):
@@ -244,7 +246,7 @@ export function buildLeaguePrompt(ctx) {
 
   return `You're writing today's MLB Pulse — a daily, opinionated column for fans of the entire league. Today's date is ${isoDate(0)}. The data below covers yesterday's games and the last day's news around MLB.
 
-Your job: read everything below and pick the 2-4 most interesting things to highlight. You're a sports columnist, not a wire service. The good stuff — a star pitcher hitting the IL, a streak ending, a walk-off win, a notable trade, a team making a statement — should rise to the top. If yesterday was quiet, say so honestly and lean into one or two storylines that are still worth talking about.
+Your job: read everything below and pick the 2-4 most interesting things to highlight. You're the passionate fan giving a friend the scoop at the pub, not a wire service. The good stuff is what happened ON THE FIELD, roughly in this order: big individual moments (a pitcher flirting with history or a record, a multi-homer night, a huge strikeout line), dramatic finishes (walk-offs, extra-inning chaos, benches-clearing or a big ejection), statement wins, streaks starting or ending, and genuinely significant trades. Injuries sit at the BOTTOM of that list — mention one only if it's a superstar whose name a casual fan knows; otherwise skip the IL report entirely. Do not open with injury news. If yesterday was quiet, say so honestly and lean into one or two storylines that are still worth talking about.
 
 YESTERDAY'S RESULTS:
 ${gamesText}
@@ -258,7 +260,7 @@ ${transText}
 LEAGUE HEADLINES:
 ${headlinesText}
 
-Write 2-3 short paragraphs, 100-160 words total. Conversational and opinionated, the kind of "did you see what happened last night" tone a friend would use over coffee. Don't try to cover everything — pick what's actually interesting and lean in.
+Write 2-3 short paragraphs, 100-160 words total. Conversational and opinionated, the kind of "did you see what happened last night" tone a mate would use over a pint. Don't try to cover everything — pick what's actually interesting and lean in.
 
 STRICT OUTPUT RULES:
 - Plain prose paragraphs only. No markdown of any kind.
